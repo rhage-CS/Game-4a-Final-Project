@@ -78,14 +78,7 @@ class TitleScene extends Phaser.Scene {
             }).setOrigin(0.5);
         }
 
-        // Show class 2 unlock message if player has finished a run before
-        if (save && save.completedRun) {
-            this.add.text(cx, cy - 15, 'Class 2 Unlocked!', {
-                fontSize: '15px', color: '#aa66ff'
-            }).setOrigin(0.5);
-        }
-
-        // Start button — goes to class select screen
+        // Start button — goes directly to the game
         const startBtn = this.add.text(cx, cy + 60, '▶  START GAME', {
             fontSize: '28px', color: '#ffffff', backgroundColor: '#1a4a1a',
             padding: { x: 24, y: 12 }, stroke: '#000000', strokeThickness: 4
@@ -93,11 +86,11 @@ class TitleScene extends Phaser.Scene {
 
         startBtn.on('pointerover', () => { startBtn.setColor('#ffff00'); startBtn.setBackgroundColor('#2a6a2a'); });
         startBtn.on('pointerout',  () => { startBtn.setColor('#ffffff'); startBtn.setBackgroundColor('#1a4a1a'); });
-        startBtn.on('pointerdown', () => this.scene.start('classSelectScene'));
+        startBtn.on('pointerdown', () => this.scene.start('gameScene'));
 
         // Keyboard shortcuts — Enter or Space also starts the game
-        this.input.keyboard.once('keydown-ENTER', () => this.scene.start('classSelectScene'));
-        this.input.keyboard.once('keydown-SPACE', () => this.scene.start('classSelectScene'));
+        this.input.keyboard.once('keydown-ENTER', () => this.scene.start('gameScene'));
+        this.input.keyboard.once('keydown-SPACE', () => this.scene.start('gameScene'));
 
         // Controls reminder at the bottom of the screen
         this.add.text(cx, cy + 140, 'WASD / Arrow Keys to move  •  Auto-attacks', {

@@ -10,13 +10,14 @@ const config = {
     physics: {
         default: 'arcade',
         arcade: {
-            debug: false,       // set to true to see hitboxes while testing
-            gravity: { y: 0 }   // top-down game — no gravity
+            debug: true,        // shows hitboxes as colored outlines — set false when done tuning
+            debugBodyColor: 0xff0000,  // red outlines
+            gravity: { y: 0 }
         }
     },
     pixelArt: false,
     backgroundColor: '#0a0a0f',
-    scene: [Load, TitleScene, ClassSelect, GameScene, LevelUpScene, WinScene, DeathScene, SettingsScene]
+    scene: [Load, TitleScene, GameScene, LevelUpScene, WinScene, DeathScene, SettingsScene]
 };
 
 const game = new Phaser.Game(config);
