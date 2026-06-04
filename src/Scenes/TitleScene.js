@@ -100,6 +100,12 @@ class TitleScene extends Phaser.Scene {
         this.add.text(cx, cy + 165, 'Survive 15 minutes and defeat the boss to win', {
             fontSize: '14px', color: '#555577'
         }).setOrigin(0.5);
+
+        // Credits line at bottom of screen
+        this.add.text(cx, this.scale.height - 18,
+            'Enemy Sprites: luizmelo  •  Icons: clockworkraven  •  Effects: untiedgames',
+            { fontSize: '11px', color: '#333355' }
+        ).setOrigin(0.5);
     }
 
     // Read save data from localStorage — returns null if nothing saved yet

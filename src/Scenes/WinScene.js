@@ -89,6 +89,23 @@ class WinScene extends Phaser.Scene {
         }).setOrigin(0.5);
 
         this.input.keyboard.once('keydown-R', () => this.scene.start('titleScene'));
+
+        // ── Asset Credits ─────────────────────────────────────────────
+        const credY = H - 72;
+        this.add.text(cx, credY, 'Asset Credits', {
+            fontSize: '13px', color: '#666688', fontStyle: 'bold'
+        }).setOrigin(0.5);
+
+        const credits = [
+            'Enemy Sprites — luizmelo  (luizmelo.itch.io/monsters-creatures-fantasy)',
+            'Icons          — clockworkraven  (clockworkraven.itch.io/raven-fantasy-icons)',
+            'Spell Effects  — untiedgames  (untiedgames.itch.io/super-pixel-effects-gigapack)',
+        ];
+        credits.forEach((line, i) => {
+            this.add.text(cx, credY + 18 + i * 16, line, {
+                fontSize: '11px', color: '#444466'
+            }).setOrigin(0.5);
+        });
     }
 
     // Spawns a burst of colourful rectangles that fly up from a point and fade out

@@ -53,10 +53,15 @@ class LevelUpScene extends Phaser.Scene {
         const bg = this.add.rectangle(x, y, w, h, 0x111133)
             .setStrokeStyle(2, borderColor);
 
-        // Icon
-        this.add.text(x, y - h / 2 + 38, upgrade.icon || '?', {
-            fontSize: '34px'
-        }).setOrigin(0.5);
+        // Icon — PNG if available, emoji text fallback
+        const iconKey = upgrade.iconKey;
+        if (iconKey && this.textures.exists(iconKey)) {
+            this.add.image(x, y - h / 2 + 44, iconKey).setDisplaySize(48, 48).setOrigin(0.5);
+        } else {
+            this.add.text(x, y - h / 2 + 38, upgrade.icon || '?', {
+                fontSize: '34px'
+            }).setOrigin(0.5);
+        }
 
         // Type badge (AUGMENT / STAT) + new vs level-up indicator
         const badgeLabel = isAugment ? 'AUGMENT' : 'STAT';

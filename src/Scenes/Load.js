@@ -23,12 +23,52 @@ class Load extends Phaser.Scene {
         this.load.image('Trees',              'assets/Map_Tileset/Trees.png');
         this.load.image('WaterTiles-6frames', 'assets/Map_Tileset/WaterTiles-6frames.png');
         this.load.image('Props',              'assets/Map_Tileset/Props.png');
+        this.load.image('Trees_seperated',    'assets/Map_Tileset/Trees_seperated.png');
 
         // Minotaur spritesheet — 128×96 per frame, 8 cols × 20 rows
         this.load.spritesheet('minotaur', 'assets/Enemies/Minotaur_Sprite_Sheet.png', { frameWidth: 128, frameHeight: 96 });
 
         // ── New enemies — all sprites 150×150 px per frame ──────────
         // 1200px wide = 8 frames | 600px wide = 4 frames
+        // ── Effect spritesheets (Effects:Spells folder) ──────────────
+        const efxPath = 'assets/Effects:Spells/';
+        this.load.spritesheet('efx_dmg',       efxPath + 'spritesheet_Dmg.png',             { frameWidth: 64, frameHeight: 64 }); // 18fr
+        this.load.spritesheet('efx_defense',   efxPath + 'spritesheet_Defense.png',         { frameWidth: 64, frameHeight: 64 }); // 18fr
+        this.load.spritesheet('efx_poison',    efxPath + 'spritesheet_Posion.png',          { frameWidth: 64, frameHeight: 64 }); // 17fr
+        this.load.spritesheet('efx_aoe',       efxPath + 'spritesheet_AOE.png',             { frameWidth: 64, frameHeight: 64 }); // 17fr
+        this.load.spritesheet('efx_music',     efxPath + 'spritesheet_Music.png',           { frameWidth: 64, frameHeight: 64 }); // 21fr
+        this.load.spritesheet('efx_exp_base',  efxPath + 'spritesheet_Explosion_Base.png',  { frameWidth: 48, frameHeight: 48 }); // 10fr
+        this.load.spritesheet('efx_exp_fire',  efxPath + 'spritesheet_Explosion_Fire.png',  { frameWidth: 64, frameHeight: 48 }); // 14fr
+        this.load.spritesheet('efx_exp_magic', efxPath + 'spritesheet_Explosion_Magic.png', { frameWidth: 48, frameHeight: 48 }); // 10fr
+
+        // ── Augment / stat icon images (Icons folder) ─────────────
+        const ic = 'assets/Icons/';
+        this.load.image('icon_attack',        ic + 'Attack.png');
+        this.load.image('icon_strength',      ic + 'Strength_Up.png');
+        this.load.image('icon_movespeed',     ic + 'MovementSpeed_Up.png');
+        this.load.image('icon_atkspeed',      ic + 'Attack_Speed_Up.png');
+        this.load.image('icon_atkrange',      ic + 'AttacRange_Up.png');
+        this.load.image('icon_pickuprange',   ic + 'Pickup_Range_Up.png');
+        this.load.image('icon_hp_regen',      ic + 'HP_Regen.png');
+        this.load.image('icon_cooldown',      ic + 'Cooldown_Reduction.png');
+        this.load.image('icon_defense',       ic + 'Defense_Up.png');
+        this.load.image('icon_shield',        ic + 'Shield.png');
+        this.load.image('icon_bomb',          ic + 'Bomb.png');
+        this.load.image('icon_chain',         ic + 'Chain.png');
+        this.load.image('icon_cloak',         ic + 'Cloak.png');
+        this.load.image('icon_deathpool',     ic + 'Death_Pool.png');
+        this.load.image('icon_doublestrike',  ic + 'Double_Strike.png');
+        this.load.image('icon_fire',          ic + 'Fire.png');
+        this.load.image('icon_freeze',        ic + 'Freeze.png');
+        this.load.image('icon_aura',          ic + 'Aura.png');
+        this.load.image('icon_lucky',         ic + 'Lucky.png');
+        this.load.image('icon_music',         ic + 'Music.png');
+        this.load.image('icon_overkill',      ic + 'OverKill.png');
+        this.load.image('icon_maxhealth',     ic + 'Max_Health.png');
+        this.load.image('icon_extrashot',     ic + 'Extra_Shot.png');
+        this.load.image('icon_omnivamp',      ic + 'OmniVamp.png');
+        this.load.image('icon_proliferate',   ic + 'Proliferate.png');
+
         const esf = { frameWidth: 150, frameHeight: 150 };
 
         // Flying Eye

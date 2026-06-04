@@ -33,6 +33,7 @@ class GameScene extends Phaser.Scene {
 
         this.setupTilemap();
         this.createPlayer();
+        this.createEffectAnimations();
         this.createEnemyAnimations();
         this.setupGroups();
         this.setupCollisions();
@@ -127,11 +128,13 @@ class GameScene extends Phaser.Scene {
             this.map.addTilesetImage('Trees',              'Trees'),
             this.map.addTilesetImage('WaterTiles-6frames', 'WaterTiles-6frames'),
             this.map.addTilesetImage('Props',              'Props'),
+            this.map.addTilesetImage('Trees_seperated',    'Trees_seperated'),
         ].filter(Boolean);
 
-        ['Ground', 'Base'].forEach((name, i) => {
+        // Layer order matches Tiled (bottom → top): Ground, Tree, Base
+        [['Ground', 0], ['Tree', 1], ['Base', 2]].forEach(([name, depth]) => {
             if (!this.map.getLayer(name)) return;
-            const layer = this.map.createLayer(name, tilesets, 0, 0).setDepth(i);
+            const layer = this.map.createLayer(name, tilesets, 0, 0).setDepth(depth);
             this.mapLayers.push(layer);
         });
     }
@@ -144,7 +147,7 @@ class GameScene extends Phaser.Scene {
         const spawnX = this._tiledSpawn ? this._tiledSpawn.x : this.WORLD_W / 2;
         const spawnY = this._tiledSpawn ? this._tiledSpawn.y : this.WORLD_H / 2;
         this.player  = this.physics.add.sprite(spawnX, spawnY, 'soldier_idle');
-        this.player.setCollideWorldBounds(true).setDepth(10);
+        this.player.setCollideWorldBounds(true).setDepth(10).setDisplaySize(110, 110);
         this.player.body.setSize(14, 18);
         this.player.body.setOffset(41, 57);
         this.createPlayerAnimations();
@@ -160,6 +163,35 @@ class GameScene extends Phaser.Scene {
         this.anims.create({ key: 'player_hurt',    frames: this.anims.generateFrameNumbers('soldier_hurt',    { start: 0, end: 3 }), frameRate: 12, repeat: 0  });
         this.anims.create({ key: 'player_death',   frames: this.anims.generateFrameNumbers('soldier_death',   { start: 0, end: 9 }), frameRate: 10, repeat: 0  });
         this.anims.create({ key: 'player_block',   frames: this.anims.generateFrameNumbers('soldier_block',   { start: 0, end: 5 }), frameRate: 12, repeat: 0  });
+    }
+
+    createEffectAnimations() {
+        if (this.anims.exists('efx_dmg')) return;
+        // All effect animations play once and auto-destroy via playEffect()
+        this.anims.create({ key: 'efx_dmg',       frames: this.anims.generateFrameNumbers('efx_dmg',       { start: 0, end: 17 }), frameRate: 16, repeat: 0 });
+        this.anims.create({ key: 'efx_defense',   frames: this.anims.generateFrameNumbers('efx_defense',   { start: 0, end: 17 }), frameRate: 16, repeat: 0 });
+        this.anims.create({ key: 'efx_poison',    frames: this.anims.generateFrameNumbers('efx_poison',    { start: 0, end: 16 }), frameRate: 14, repeat: 0 });
+        this.anims.create({ key: 'efx_aoe',       frames: this.anims.generateFrameNumbers('efx_aoe',       { start: 0, end: 16 }), frameRate: 16, repeat: 0 });
+        this.anims.create({ key: 'efx_music',     frames: this.anims.generateFrameNumbers('efx_music',     { start: 0, end: 20 }), frameRate: 14, repeat: 0 });
+        this.anims.create({ key: 'efx_exp_base',  frames: this.anims.generateFrameNumbers('efx_exp_base',  { start: 0, end: 9  }), frameRate: 16, repeat: 0 });
+        this.anims.create({ key: 'efx_exp_fire',  frames: this.anims.generateFrameNumbers('efx_exp_fire',  { start: 0, end: 13 }), frameRate: 14, repeat: 0 });
+        this.anims.create({ key: 'efx_exp_magic', frames: this.anims.generateFrameNumbers('efx_exp_magic', { start: 0, end: 9  }), frameRate: 16, repeat: 0 });
+    }
+
+    showMiss(x, y) {
+        const t = this.add.text(x, y - 20, 'MISS', {
+            fontSize: '14px', color: '#ffffff', stroke: '#000000', strokeThickness: 3, alpha: 0.9
+        }).setDepth(20).setOrigin(0.5);
+        this.tweens.add({ targets: t, y: t.y - 40, alpha: 0, duration: 600,
+            ease: 'Quad.easeOut', onComplete: () => t.destroy() });
+    }
+
+    // Plays a one-shot effect sprite at world (x, y) then destroys it
+    playEffect(key, x, y, scale = 1.5) {
+        if (!this.textures.exists(key)) return;
+        const s = this.add.sprite(x, y, key).setDepth(18).setScale(scale);
+        s.play(key);
+        s.once('animationcomplete', () => { if (s.active) s.destroy(); });
     }
 
     createEnemyAnimations() {
@@ -225,12 +257,14 @@ class GameScene extends Phaser.Scene {
     // ================================================================
 
     setupTimers() {
-        this.spawnTimer = this.time.addEvent({ delay: 3000, callback: this.spawnEnemy, callbackScope: this, loop: true });
-        this.time.addEvent({ delay: 30000, callback: this.updateSpawnRate, callbackScope: this, loop: true });
+        this.spawnTimer = this.time.addEvent({ delay: 1800, callback: this.spawnEnemy, callbackScope: this, loop: true });
+        this.time.addEvent({ delay: 15000, callback: this.updateSpawnRate, callbackScope: this, loop: true });
     }
 
     updateSpawnRate() {
-        const newDelay = Math.max(800, 3000 - this.getDifficulty() * 600);
+        const diff     = this.getDifficulty();
+        // Exponential decay — halves roughly every 1.5 difficulty levels
+        const newDelay = Math.max(280, Math.floor(1800 * Math.pow(0.68, diff)));
         this.spawnTimer.reset({ delay: newDelay, callback: this.spawnEnemy, callbackScope: this, loop: true });
     }
 
@@ -452,6 +486,7 @@ class GameScene extends Phaser.Scene {
                     expiry:   this.time.now + duration
                 };
                 enemy.setTint(0xff6600);
+                this.playEffect('efx_poison', enemy.x, enemy.y, 1.2);
             }
 
             this.applyDamageToEnemy(enemy, dmg);
@@ -460,7 +495,11 @@ class GameScene extends Phaser.Scene {
             if (this.augLevel('omnivamp')) {
                 const vampPcts = [0.03, 0.07, 0.12];
                 const healPct  = vampPcts[this.augLevel('omnivamp') - 1] + this.omnivampStacks * 0.01;
-                this.stats.hp  = Math.min(this.stats.maxHp, this.stats.hp + dmg * healPct);
+                const healed   = dmg * healPct;
+                if (healed > 0) {
+                    this.stats.hp = Math.min(this.stats.maxHp, this.stats.hp + healed);
+                    this.playEffect('efx_dmg', this.player.x, this.player.y - 20, 1.2);
+                }
             }
 
             if (this.augLevel('chain')) {
@@ -470,12 +509,14 @@ class GameScene extends Phaser.Scene {
                     if (!ct) break;
                     excluded.push(ct);
                     this.applyDamageToEnemy(ct, dmg * 0.6);
+                    this.playEffect('efx_exp_magic', ct.x, ct.y, 1);
                 }
             }
 
             if (this.augLevel('overkill') && prevHp > 0 && prevHp < dmg) {
                 const excess = dmg - prevHp;
                 const radius = 80 + this.augLevel('overkill') * 20;
+                this.playEffect('efx_aoe', ex, ey, 1.5);
                 this.enemies.getChildren().forEach(other => {
                     if (inRange.includes(other) || other === enemy) return;
                     if (Phaser.Math.Distance.Between(ex, ey, other.x, other.y) < radius) {
@@ -499,6 +540,7 @@ class GameScene extends Phaser.Scene {
                 this.playSound('hit', { volume: 0.3 });
                 dsTargets.forEach(enemy => {
                     this.applyDamageToEnemy(enemy, this.stats.damage * dsMult, true);
+                    this.playEffect('efx_exp_magic', enemy.x, enemy.y, 0.9);
                     if (dsLv >= 4) {
                         const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, enemy.x, enemy.y);
                         enemy.body.setVelocity(Math.cos(angle) * 220, Math.sin(angle) * 220);
@@ -568,19 +610,24 @@ class GameScene extends Phaser.Scene {
 
     spawnEnemy() {
         if (!this.gameActive || this.bossSpawned) return;
-        const pos  = this.getSpawnPosition();
         const diff = this.getDifficulty();
-        const r    = Math.random();
-        let type;
-        if      (diff < 1) type = r < 0.5 ? 'eye' : 'goblin';
-        else if (diff < 2) type = r < 0.25 ? 'eye' : r < 0.5 ? 'goblin' : r < 0.75 ? 'mushroom' : 'skeleton';
-        else               type = r < 0.2  ? 'eye' : r < 0.4 ? 'goblin' : r < 0.6  ? 'mushroom' : r < 0.8 ? 'skeleton' : 'minotaur';
+        // Exponential wave size: 1 → 2 → 3 → 4 → 5 as difficulty climbs
+        const count = Math.min(5, Math.ceil(Math.pow(diff + 1, 1.35)));
 
-        if      (type === 'eye')      this.createFlyingEye(pos.x, pos.y, diff);
-        else if (type === 'goblin')   this.createGoblin(pos.x, pos.y, diff);
-        else if (type === 'mushroom') this.createMushroom(pos.x, pos.y, diff);
-        else if (type === 'skeleton') this.createSkeleton(pos.x, pos.y, diff);
-        else                          this.createMinotaur(pos.x, pos.y, diff);
+        for (let i = 0; i < count; i++) {
+            const pos = this.getSpawnPosition();
+            const r   = Math.random();
+            let type;
+            if      (diff < 1) type = r < 0.5  ? 'eye' : 'goblin';
+            else if (diff < 2) type = r < 0.25  ? 'eye' : r < 0.5  ? 'goblin' : r < 0.75 ? 'mushroom' : 'skeleton';
+            else               type = r < 0.2   ? 'eye' : r < 0.4  ? 'goblin' : r < 0.6  ? 'mushroom' : r < 0.8 ? 'skeleton' : 'minotaur';
+
+            if      (type === 'eye')      this.createFlyingEye(pos.x, pos.y, diff);
+            else if (type === 'goblin')   this.createGoblin(pos.x, pos.y, diff);
+            else if (type === 'mushroom') this.createMushroom(pos.x, pos.y, diff);
+            else if (type === 'skeleton') this.createSkeleton(pos.x, pos.y, diff);
+            else                          this.createMinotaur(pos.x, pos.y, diff);
+        }
     }
 
     getSpawnPosition() {
@@ -607,7 +654,7 @@ class GameScene extends Phaser.Scene {
 
     createRusher(x, y, diff) {
         const e = this.enemies.create(x, y, 'enemy_rusher');
-        e.setDepth(8).setDisplaySize(80, 80);
+        e.setDepth(8).setDisplaySize(92, 92);
         e.body.setSize(24, 24).setOffset(28, 28);
         e.enemyType = 'rusher'; e.maxHp = 20 + diff * 15; e.hp = e.maxHp;
         e.moveSpeed = 110 + diff * 30; e.damage = 10 + diff * 5; e.xpValue = 8;
@@ -618,7 +665,7 @@ class GameScene extends Phaser.Scene {
 
     createShooter(x, y, diff) {
         const e = this.enemies.create(x, y, 'enemy_shooter');
-        e.setDepth(8).setDisplaySize(80, 80);
+        e.setDepth(8).setDisplaySize(92, 92);
         e.body.setSize(50, 50).setOffset(0, 0);
         e.enemyType = 'shooter'; e.maxHp = 25 + diff * 12; e.hp = e.maxHp;
         e.moveSpeed = 80 + diff * 20; e.damage = 8 + diff * 3; e.xpValue = 12;
@@ -630,7 +677,7 @@ class GameScene extends Phaser.Scene {
 
     createArcer(x, y, diff) {
         const e = this.enemies.create(x, y, 'enemy_arcer');
-        e.setDepth(8).setDisplaySize(80, 80);
+        e.setDepth(8).setDisplaySize(92, 92);
         e.body.setSize(50, 50).setOffset(0, 0);
         e.enemyType = 'arcer'; e.maxHp = 30 + diff * 14; e.hp = e.maxHp;
         e.moveSpeed = 90 + diff * 22; e.damage = 12 + diff * 4; e.xpValue = 15;
@@ -643,7 +690,7 @@ class GameScene extends Phaser.Scene {
 
     createFlyingEye(x, y, diff) {
         const e = this.enemies.create(x, y, 'eye_flight');
-        e.setDepth(8).setDisplaySize(75, 75);
+        e.setDepth(8).setDisplaySize(86, 86);
         e.body.setSize(24, 22).setOffset(63, 64);
         e.enemyType = 'eye'; e.maxHp = 35 + diff * 12; e.hp = e.maxHp;
         e.moveSpeed = 130 + diff * 20; e.damage = 8 + diff * 3; e.xpValue = 12;
@@ -655,7 +702,7 @@ class GameScene extends Phaser.Scene {
 
     createGoblin(x, y, diff) {
         const e = this.enemies.create(x, y, 'gob_run');
-        e.setDepth(8).setDisplaySize(75, 75);
+        e.setDepth(8).setDisplaySize(86, 86);
         e.body.setSize(20, 28).setOffset(65, 61);
         e.enemyType = 'goblin'; e.maxHp = 45 + diff * 12; e.hp = e.maxHp;
         e.moveSpeed = 120 + diff * 18; e.damage = 10 + diff * 3; e.xpValue = 10;
@@ -667,7 +714,7 @@ class GameScene extends Phaser.Scene {
 
     createMushroom(x, y, diff) {
         const e = this.enemies.create(x, y, 'mush_run');
-        e.setDepth(8).setDisplaySize(80, 80);
+        e.setDepth(8).setDisplaySize(92, 92);
         e.body.setSize(22, 28).setOffset(64, 61);
         e.enemyType = 'mushroom'; e.maxHp = 90 + diff * 25; e.hp = e.maxHp;
         e.moveSpeed = 55 + diff * 10; e.damage = 18 + diff * 5; e.xpValue = 18;
@@ -679,7 +726,7 @@ class GameScene extends Phaser.Scene {
 
     createSkeleton(x, y, diff) {
         const e = this.enemies.create(x, y, 'skel_walk');
-        e.setDepth(8).setDisplaySize(80, 80);
+        e.setDepth(8).setDisplaySize(92, 92);
         e.body.setSize(20, 30).setOffset(65, 60);
         e.enemyType = 'skeleton'; e.maxHp = 65 + diff * 18; e.hp = e.maxHp;
         e.moveSpeed = 80 + diff * 14; e.damage = 12 + diff * 4; e.xpValue = 15;
@@ -691,7 +738,7 @@ class GameScene extends Phaser.Scene {
 
     createMinotaur(x, y, diff) {
         const e = this.enemies.create(x, y, 'minotaur');
-        e.setDepth(8).setDisplaySize(80, 60); // preserves 128:96 = 4:3 ratio
+        e.setDepth(8).setDisplaySize(92, 69); // preserves 128:96 = 4:3 ratio
         e.body.setSize(24, 24).setOffset(52, 36);
         e.enemyType = 'minotaur'; e.maxHp = 80 + diff * 30; e.hp = e.maxHp;
         e.moveSpeed = 65 + diff * 15; e.damage = 20 + diff * 8; e.xpValue = 30;
@@ -714,28 +761,74 @@ class GameScene extends Phaser.Scene {
     }
 
     spawnBoss() {
-        const cam = this.cameras.main;
-        const boss = this.enemies.create(
-            Math.min(cam.scrollX + cam.width + 80, this.WORLD_W - 80),
-            Phaser.Math.Clamp(cam.scrollY + cam.height / 2, 80, this.WORLD_H - 80),
-            'enemy_boss'
-        );
-        boss.setDepth(9).setDisplaySize(120, 120);
-        boss.body.setSize(40, 40).setOffset(12, 12);
-        boss.enemyType = 'boss'; boss.maxHp = 1000; boss.hp = 1000;
-        boss.moveSpeed = 120; boss.damage = 20; boss.xpValue = 500;
-        boss.isDying = false; boss.isBiting = false; boss.lastMeleeTime = 0; boss.debuffs = {};
+        const cam  = this.cameras.main;
+        const zoom = cam.zoom;
+
+        // Pick a random enemy form and a random glow colour — different every run
+        const forms = [
+            { tex: 'minotaur',   move: 'mino_move',  attack: 'mino_attack', idle: 'mino_idle',   death: 'mino_death',  w: 276, h: 207 },
+            { tex: 'eye_flight', move: 'eye_flight', attack: 'eye_attack',  idle: 'eye_flight',  death: 'eye_death',   w: 253, h: 253 },
+            { tex: 'gob_run',    move: 'gob_run',    attack: 'gob_attack',  idle: 'gob_idle',    death: 'gob_death',   w: 253, h: 253 },
+            { tex: 'mush_run',   move: 'mush_run',   attack: 'mush_attack', idle: 'mush_idle',   death: 'mush_death',  w: 265, h: 265 },
+            { tex: 'skel_walk',  move: 'skel_walk',  attack: 'skel_attack', idle: 'skel_shield', death: 'skel_death',  w: 253, h: 253 },
+        ];
+        const glowPalette = [0xff00ff, 0x00ffff, 0xff6600, 0x00ff88, 0xffdd00, 0xff0055, 0x8844ff, 0x44aaff];
+        const form  = Phaser.Math.RND.pick(forms);
+        const gClr  = Phaser.Math.RND.pick(glowPalette);
+
+        const bx = Math.min(cam.scrollX + cam.width / zoom + 80, this.WORLD_W - 80);
+        const by = Phaser.Math.Clamp(cam.scrollY + (cam.height / zoom) / 2, 80, this.WORLD_H - 80);
+
+        const boss = this.enemies.create(bx, by, form.tex);
+        boss.setDepth(9).setDisplaySize(form.w, form.h);
+        boss.body.setSize(70, 70).setOffset(0, 0);
+
+        boss.enemyType    = 'boss';
+        boss.bossForm     = form;          // stores animation keys
+        boss.maxHp        = 10000;
+        boss.hp           = 10000;
+        boss.moveSpeed    = 105;
+        boss.damage       = 40;
+        boss.xpValue      = 5000;
+        boss.attackCooldown = 1100;
+        boss.lastAttackTime = 0;
+        boss.isAttacking  = false;
+        boss.isHurt       = false;
+        boss.isDying      = false;
+        boss.isBiting     = false;
+        boss.lastMeleeTime = 0;
+        boss.debuffs      = {};
+
+        boss.play(form.idle);
+
+        // Pulsing coloured glow behind the boss
+        const gfx = this.add.graphics().setDepth(8);
+        gfx.fillStyle(gClr, 0.5);
+        gfx.fillCircle(0, 0, 120);
+        gfx.setPosition(bx, by);
+        boss.glowGfx = gfx;
+
+        this.tweens.add({
+            targets: gfx,
+            alpha:  { from: 0.25, to: 0.85 },
+            scaleX: { from: 0.85, to: 1.2  },
+            scaleY: { from: 0.85, to: 1.2  },
+            duration: 650,
+            yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+        });
 
         this.bossRef = boss; this.bossAlive = true;
         this.bossBarBg.setVisible(true); this.bossBarFill.setVisible(true); this.bossLabel.setVisible(true);
         this.startMusic('boss_music');
-        this.cameras.main.flash(500, 255, 100, 0);
-        // Boss text lives on the UI camera (main camera ignores it)
-        const bossText = this.add.text(this.scale.width / 2, this.scale.height / 2 - 60, '⚠ BOSS APPEARED ⚠',
-            { fontSize: '36px', color: '#ff4400', stroke: '#000', strokeThickness: 5 }
+        this.cameras.main.flash(600, 255, 100, 0);
+
+        const bossText = this.add.text(
+            this.scale.width / 2, this.scale.height / 2 - 60,
+            '⚠  FINAL BOSS  ⚠',
+            { fontSize: '40px', color: '#ff2200', fontStyle: 'bold', stroke: '#000', strokeThickness: 6 }
         ).setDepth(200).setOrigin(0.5);
         this.cameras.main.ignore(bossText);
-        this.time.delayedCall(3000, () => { if (bossText.active) bossText.destroy(); });
+        this.time.delayedCall(3500, () => { if (bossText.active) bossText.destroy(); });
     }
 
     // ================================================================
@@ -840,6 +933,7 @@ class GameScene extends Phaser.Scene {
                     if (!this.gameActive || !enemy.active || enemy.isDying) return;
                     const d = Phaser.Math.Distance.Between(enemy.x, enemy.y, this.player.x, this.player.y);
                     if (d <= attackRange + 15) {
+                        if (Math.random() < 0.30) { this.showMiss(enemy.x, enemy.y); return; }
                         this.damagePlayer(enemy.damage);
                         this.cameras.main.flash(100, 255, 50, 0);
                     }
@@ -883,6 +977,7 @@ class GameScene extends Phaser.Scene {
                     if (!this.gameActive || !enemy.active || enemy.isDying) return;
                     const d = Phaser.Math.Distance.Between(enemy.x, enemy.y, this.player.x, this.player.y);
                     if (d <= attackRange + 15) {
+                        if (Math.random() < 0.30) { this.showMiss(enemy.x, enemy.y); return; } // 30% miss
                         this.damagePlayer(enemy.damage);
                         this.cameras.main.flash(80, 255, 50, 0);
                     }
@@ -913,22 +1008,57 @@ class GameScene extends Phaser.Scene {
         this.seekAndAttack(enemy, 'skel_walk', 'skel_attack', 'skel_shield', 44, time);
     }
 
-    // Boss wolf: always seeks player, plays wolf_run while charging,
-    // plays wolf_attack and bites when close (same as rusher but scaled up)
     aiBoss(boss, time) {
+        // Keep pulsing glow centred on the boss every frame
+        if (boss.glowGfx?.active) boss.glowGfx.setPosition(boss.x, boss.y);
+
+        if (!boss.bossForm) return; // legacy fallback
+
+        const f = boss.bossForm;
+        // Phase 2 (below 50% HP) — faster and more aggressive
+        const phase2 = boss.hp < boss.maxHp * 0.5;
+        boss.currentSpeed = phase2 ? boss.moveSpeed * 1.5 : boss.moveSpeed;
+        boss.attackCooldown = phase2 ? 700 : 1100;
+
+        // Use the shared seekAndAttack helper with the boss's own animation keys
+        // Boss has a slightly smaller miss rate than regular enemies (15%)
+        if (boss.isAttacking || boss.isHurt) return;
+
         const dx   = this.player.x - boss.x;
         const dy   = this.player.y - boss.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        const speed = boss.hp < boss.maxHp * 0.5 ? 180 : 130;
+        const attackRange = 100;
 
-        if (dist > 0) {
-            boss.body.setVelocity((dx / dist) * speed, (dy / dist) * speed);
-            boss.setFlipX(dx < 0);
-        }
-        if (dist <= 55 && time - (boss.lastMeleeTime || 0) >= 800) {
-            boss.lastMeleeTime = time;
-            this.damagePlayer(boss.damage);
-            this.cameras.main.flash(100, 255, 50, 0);
+        boss.setFlipX(dx < 0);
+
+        if (dist > attackRange) {
+            boss.body.setVelocity((dx / dist) * boss.currentSpeed, (dy / dist) * boss.currentSpeed);
+            if (boss.anims.currentAnim?.key !== f.move) boss.play(f.move, true);
+        } else {
+            boss.body.setVelocity(0, 0);
+            const cur = boss.anims.currentAnim?.key;
+            if (cur !== f.idle && cur !== f.attack) boss.play(f.idle, true);
+
+            if (time - boss.lastAttackTime >= boss.attackCooldown) {
+                boss.lastAttackTime = time;
+                boss.isAttacking = true;
+                boss.play(f.attack, true);
+                this.time.delayedCall(320, () => {
+                    if (!this.gameActive || !boss.active || boss.isDying) return;
+                    const d = Phaser.Math.Distance.Between(boss.x, boss.y, this.player.x, this.player.y);
+                    if (d <= attackRange + 20) {
+                        if (Math.random() < 0.15) { this.showMiss(boss.x, boss.y); return; }
+                        this.damagePlayer(boss.damage);
+                        this.cameras.main.flash(130, 255, 30, 0);
+                    }
+                });
+                boss.once('animationcomplete', () => {
+                    if (boss.active && !boss.isDying) {
+                        boss.isAttacking = false;
+                        boss.play(f.idle, true);
+                    }
+                });
+            }
         }
     }
 
@@ -974,7 +1104,8 @@ class GameScene extends Phaser.Scene {
             }
             case 'freeze':
                 enemy.debuffs.freeze = { expiry: this.time.now + 1500 + durationBonus };
-                enemy.setTint(0x88ccff); // blue tint while frozen
+                enemy.setTint(0x88ccff);
+                this.playEffect('efx_exp_magic', enemy.x, enemy.y, 1);
                 break;
 
             case 'bleed': {
@@ -1088,7 +1219,7 @@ class GameScene extends Phaser.Scene {
         this.stats.attackCooldown  = Math.max(200, Math.floor(this.stats.attackCooldown * cdMult));
         this.musicBuff = { active: true, speedApplied: newSpeed, dmgApplied: newDmg, cdApplied: 1 / cdMult };
 
-        this.showMusicNotes();
+        this.playEffect('efx_music', this.player.x, this.player.y, 1.8);
 
         this.musicBuffTimer = this.time.delayedCall(duration, () => {
             if (!this.gameActive) return;
@@ -1150,6 +1281,7 @@ class GameScene extends Phaser.Scene {
                 enemy.lastAuraHit = now;
                 this.applyDamageToEnemy(enemy, auraDmg, true);
                 this.applyDebuff(enemy, 'vulnerable', 1);
+                this.playEffect('efx_aoe', enemy.x, enemy.y, 0.9);
                 // Knockback away from player
                 const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, enemy.x, enemy.y);
                 enemy.body.setVelocity(Math.cos(angle) * 220, Math.sin(angle) * 220);
@@ -1208,6 +1340,7 @@ class GameScene extends Phaser.Scene {
         const now = this.time.now;
         if (!enemy.lastMeleeTime || now - enemy.lastMeleeTime > 600) {
             enemy.lastMeleeTime = now;
+            if (Math.random() < 0.30) { this.showMiss(enemy.x, enemy.y); return; }
             this.damagePlayer(enemy.damage);
         }
     }
@@ -1274,6 +1407,7 @@ class GameScene extends Phaser.Scene {
 
         // Fire Attack Lv3 — spread fire to nearest alive enemy
         if (this.augLevel('fireAttack') >= 3 && enemy.debuffs?.fire) {
+            this.playEffect('efx_exp_fire', enemy.x, enemy.y, 1.4);
             const nearest = this.findNearestEnemy(enemy.x, enemy.y, [enemy]);
             if (nearest) {
                 if (!nearest.debuffs) nearest.debuffs = {};
@@ -1283,6 +1417,7 @@ class GameScene extends Phaser.Scene {
                     expiry:   this.time.now + 4000
                 };
                 nearest.setTint(0xff6600);
+                this.playEffect('efx_exp_fire', nearest.x, nearest.y, 1.2);
             }
         }
 
@@ -1300,9 +1435,28 @@ class GameScene extends Phaser.Scene {
 
         if (enemy.enemyType === 'boss') {
             this.bossAlive = false;
+            // Stop the glow tween and fade it out
+            if (enemy.glowGfx) {
+                this.tweens.killTargetsOf(enemy.glowGfx);
+                this.tweens.add({ targets: enemy.glowGfx, alpha: 0, duration: 800,
+                    onComplete: () => { if (enemy.glowGfx?.active) enemy.glowGfx.destroy(); } });
+            }
             this.playSound('boss_death', { volume: 0.8 });
-            enemy.destroy();
-            this.triggerWin();
+            // Play the boss form's death animation if one exists
+            const deathKey = enemy.bossForm?.death;
+            if (deathKey && this.anims.exists(deathKey)) {
+                enemy.isDying = true;
+                enemy.isAttacking = false; enemy.isHurt = false;
+                enemy.body.setVelocity(0, 0);
+                enemy.play(deathKey, true);
+                enemy.once('animationcomplete', () => {
+                    if (enemy.active) enemy.destroy();
+                    this.triggerWin();
+                });
+            } else {
+                enemy.destroy();
+                this.triggerWin();
+            }
             return;
         }
 
@@ -1336,6 +1490,7 @@ class GameScene extends Phaser.Scene {
         if (this.shieldCharges > 0) {
             this.shieldCharges--;
             this.cameras.main.flash(80, 0, 100, 255);
+            this.playEffect('efx_defense', this.player.x, this.player.y, 1.5);
             if (!this.isDead) {
                 this.isHurt = true;
                 this.player.play('player_block', true);
@@ -1366,8 +1521,9 @@ class GameScene extends Phaser.Scene {
     dropXpOrb(x, y, value) {
         const orb = this.xpOrbs.create(x, y, 'xp_orb');
         if (!orb) return;
-        orb.xpValue = value; orb.setDepth(4);
-        orb.body.setVelocity(Phaser.Math.Between(-40, 40), Phaser.Math.Between(-40, 40));
+        orb.xpValue = value;
+        orb.setDepth(4).setDisplaySize(18, 18); // visible at 1.8× zoom
+        orb.body.setVelocity(Phaser.Math.Between(-50, 50), Phaser.Math.Between(-50, 50));
         this.time.delayedCall(300, () => { if (orb.active) orb.body.setVelocity(0, 0); });
     }
 
@@ -1376,6 +1532,7 @@ class GameScene extends Phaser.Scene {
     // ================================================================
 
     createDeathPool(x, y) {
+        this.playEffect('efx_poison', x, y, 1.5);
         const pool = this.deathPoolGroup.create(x, y, 'death_pool');
         if (!pool) return;
         const lv = this.augLevel('deathPool');
@@ -1420,31 +1577,31 @@ class GameScene extends Phaser.Scene {
 
     getAllUpgrades() {
         return [
-            // ── Stat Upgrades ──────────────────────────────────────────
-            { id: 'damage',      type: 'stat',    name: 'Damage',       icon: '⚔',  maxLevel: 10, desc: lv => `+5 flat damage  [Lv.${lv}]` },
-            { id: 'attackSpeed', type: 'stat',    name: 'Attack Speed', icon: '⚡',  maxLevel: 8,  desc: lv => `+15% attack rate  [Lv.${lv}]` },
-            { id: 'moveSpeed',   type: 'stat',    name: 'Move Speed',   icon: '👟', maxLevel: 8,  desc: lv => `+20 move speed  [Lv.${lv}]` },
-            { id: 'hpRegen',     type: 'stat',    name: 'HP Regen',     icon: '💚', maxLevel: 8,  desc: lv => `+0.5 HP/sec  [Lv.${lv}]` },
-            { id: 'pickupRange', type: 'stat',    name: 'Pickup Range', icon: '🧲', maxLevel: 5,  desc: lv => `+30 XP pickup radius  [Lv.${lv}]` },
-            { id: 'maxHealth',   type: 'stat',    name: 'Max Health',   icon: '❤',  maxLevel: 6,  desc: lv => `+20 max HP  [Lv.${lv}]` },
-            { id: 'extraShot',   type: 'stat',    name: 'Extra Shot',   icon: '✦',  maxLevel: 3,  desc: lv => `+1 extra projectile/attack  [Lv.${lv}]` },
-            { id: 'cooldown',    type: 'stat',    name: 'Cooldown',     icon: '⏱',  maxLevel: 5,  desc: lv => `-10% all cooldowns  [Lv.${lv}]` },
+            // ── Stat Upgrades ─── iconKey maps to the loaded PNG; null = emoji fallback ──
+            { id: 'damage',      type: 'stat', name: 'Damage',       icon: '⚔',  iconKey: 'icon_strength',   maxLevel: 10, desc: lv => `+5 flat damage  [Lv.${lv}]` },
+            { id: 'attackSpeed', type: 'stat', name: 'Attack Speed', icon: '⚡',  iconKey: 'icon_atkspeed',   maxLevel: 8,  desc: lv => `+15% attack rate  [Lv.${lv}]` },
+            { id: 'moveSpeed',   type: 'stat', name: 'Move Speed',   icon: '👟',  iconKey: 'icon_movespeed',  maxLevel: 8,  desc: lv => `+20 move speed  [Lv.${lv}]` },
+            { id: 'hpRegen',     type: 'stat', name: 'HP Regen',     icon: '💚',  iconKey: 'icon_hp_regen',   maxLevel: 8,  desc: lv => `+0.5 HP/sec  [Lv.${lv}]` },
+            { id: 'pickupRange', type: 'stat', name: 'Pickup Range', icon: '🧲',  iconKey: 'icon_pickuprange',maxLevel: 5,  desc: lv => `+30 XP pickup radius  [Lv.${lv}]` },
+            { id: 'maxHealth',   type: 'stat', name: 'Max Health',   icon: '❤',   iconKey: 'icon_maxhealth',  maxLevel: 6,  desc: lv => `+20 max HP  [Lv.${lv}]` },
+            { id: 'extraShot',   type: 'stat', name: 'Extra Shot',   icon: '✦',   iconKey: 'icon_extrashot',  maxLevel: 3,  desc: lv => `+1 extra attack width  [Lv.${lv}]` },
+            { id: 'cooldown',    type: 'stat', name: 'Cooldown',     icon: '⏱',   iconKey: 'icon_cooldown',   maxLevel: 5,  desc: lv => `-10% all cooldowns  [Lv.${lv}]` },
 
-            // ── Augments ───────────────────────────────────────────────
-            { id: 'overkill',     type: 'augment', name: 'Overkill',      icon: '💥', maxLevel: 4, desc: lv => `Excess dmg splashes ${80+lv*20}px radius` },
-            { id: 'doubleStrike', type: 'augment', name: 'Double Strike', icon: '⚔⚔', maxLevel: 4, desc: lv => `Follow-up strike at ${30+lv*10}% dmg${lv>=4?' + knockback':''}` },
-            { id: 'musicNotes',   type: 'augment', name: 'Music Notes',   icon: '🎵', maxLevel: 3, desc: lv => `Attack buffs speed/dmg/atkspd for ${[2,3.5,5][lv-1]}s${lv>=3?'. Kills stack (diminishing)':''}` },
-            { id: 'fireAttack',   type: 'augment', name: 'Fire Attack',   icon: '🔥', maxLevel: 3, desc: lv => `Attacks ignite: ${[2,3,3][lv-1]} stacks, ${[3,4.5,5][lv-1]}s${lv>=3?' + spreads on kill':''}` },
-            { id: 'omnivamp',     type: 'augment', name: 'Omni-Vamp',     icon: '🩸', maxLevel: 3, desc: lv => `Heal ${[3,7,12][lv-1]}% of dmg dealt${lv>=3?'. Kills steal enemy stats (5× max)':''}` },
-            { id: 'deathPool',    type: 'augment', name: 'Death Pool',    icon: '☠',  maxLevel: 4, desc: lv => `Bleed puddles deal ${5+lv*3} DPS` },
-            { id: 'freeze',       type: 'augment', name: 'Freeze',        icon: '❄',  maxLevel: 3, desc: lv => `Slow 20% per stack (+${lv} stacks), x5=freeze` },
-            { id: 'chain',        type: 'augment', name: 'Chain',         icon: '🔗', maxLevel: 3, desc: lv => `Attacks chain to ${lv} extra enem${lv>1?'ies':'y'}` },
-            { id: 'proliferate',  type: 'augment', name: 'Proliferate',   icon: '🌀', maxLevel: 4, desc: lv => `+${lv} debuff stacks, +${(Math.min(4,lv*1.5)).toFixed(1)}s duration` },
-            { id: 'aura',         type: 'augment', name: 'Aura',          icon: '🔵', maxLevel: 3, desc: lv => `Rotating rings: ${lv*5} dmg, knockback, Vulnerable` },
-            { id: 'lucky',        type: 'augment', name: 'Lucky',         icon: '🍀', maxLevel: 3, desc: lv => `+${lv*5}% crit chance, better upgrade pool` },
-            { id: 'shield',       type: 'augment', name: 'Shield',        icon: '🛡',  maxLevel: 3, desc: lv => `${lv} block${lv>1?'s':''}, ${Math.max(8,20-lv*4)}s recharge` },
-            { id: 'cloak',        type: 'augment', name: 'Cloak',         icon: '🎯', maxLevel: 5, desc: lv => `+${lv*19}% crit chance${lv>=5?', +20% crit dmg':''}` },
-            { id: 'bombs',        type: 'augment', name: 'Bombs',         icon: '💣', maxLevel: 3, desc: lv => `Throw 2 bombs every ${[8,6,4][lv-1]}s, ${[25,40,60][lv-1]}dmg${lv>=3?' + burn ground, extra hp-% bomb, DoTs, crits':''}` },
+            // ── Augments ──────────────────────────────────────────────────────────────
+            { id: 'overkill',     type: 'augment', name: 'Overkill',      icon: '💥',  iconKey: 'icon_overkill',    maxLevel: 4, desc: lv => `Excess dmg splashes ${80+lv*20}px radius` },
+            { id: 'doubleStrike', type: 'augment', name: 'Double Strike', icon: '⚔⚔', iconKey: 'icon_doublestrike', maxLevel: 4, desc: lv => `Follow-up strike at ${30+lv*10}% dmg${lv>=4?' + knockback':''}` },
+            { id: 'musicNotes',   type: 'augment', name: 'Music Notes',   icon: '🎵',  iconKey: 'icon_music',       maxLevel: 3, desc: lv => `Attack buffs speed/dmg/atkspd for ${[2,3.5,5][lv-1]}s${lv>=3?'. Kills stack (diminishing)':''}` },
+            { id: 'fireAttack',   type: 'augment', name: 'Fire Attack',   icon: '🔥',  iconKey: 'icon_fire',        maxLevel: 3, desc: lv => `Attacks ignite: ${[2,3,3][lv-1]} stacks, ${[3,4.5,5][lv-1]}s${lv>=3?' + spreads on kill':''}` },
+            { id: 'omnivamp',     type: 'augment', name: 'Omni-Vamp',     icon: '🩸',  iconKey: 'icon_omnivamp',    maxLevel: 3, desc: lv => `Heal ${[3,7,12][lv-1]}% of dmg dealt${lv>=3?'. Kills steal enemy stats (5× max)':''}` },
+            { id: 'deathPool',    type: 'augment', name: 'Death Pool',    icon: '☠',   iconKey: 'icon_deathpool',   maxLevel: 4, desc: lv => `Bleed puddles deal ${5+lv*3} DPS` },
+            { id: 'freeze',       type: 'augment', name: 'Freeze',        icon: '❄',   iconKey: 'icon_freeze',      maxLevel: 3, desc: lv => `Slow 20% per stack (+${lv} stacks), x5=freeze` },
+            { id: 'chain',        type: 'augment', name: 'Chain',         icon: '🔗',  iconKey: 'icon_chain',       maxLevel: 3, desc: lv => `Attacks chain to ${lv} extra enem${lv>1?'ies':'y'}` },
+            { id: 'proliferate',  type: 'augment', name: 'Proliferate',   icon: '🌀',  iconKey: 'icon_proliferate', maxLevel: 4, desc: lv => `+${lv} debuff stacks, +${(Math.min(4,lv*1.5)).toFixed(1)}s duration` },
+            { id: 'aura',         type: 'augment', name: 'Aura',          icon: '🔵',  iconKey: 'icon_aura',        maxLevel: 3, desc: lv => `Rotating rings: ${lv*5} dmg, knockback, Vulnerable` },
+            { id: 'lucky',        type: 'augment', name: 'Lucky',         icon: '🍀',  iconKey: 'icon_lucky',       maxLevel: 3, desc: lv => `+${lv*5}% crit chance, better upgrade pool` },
+            { id: 'shield',       type: 'augment', name: 'Shield',        icon: '🛡',   iconKey: 'icon_shield',      maxLevel: 3, desc: lv => `${lv} block${lv>1?'s':''}, ${Math.max(8,20-lv*4)}s recharge` },
+            { id: 'cloak',        type: 'augment', name: 'Cloak',         icon: '🎯',  iconKey: 'icon_cloak',       maxLevel: 5, desc: lv => `+${lv*19}% crit chance${lv>=5?', +20% crit dmg':''}` },
+            { id: 'bombs',        type: 'augment', name: 'Bombs',         icon: '💣',  iconKey: 'icon_bomb',        maxLevel: 3, desc: lv => `Throw 2 bombs every ${[8,6,4][lv-1]}s, ${[25,40,60][lv-1]}dmg${lv>=3?' + burn ground, extra hp-% bomb, DoTs, crits':''}` },
         ];
     }
 
@@ -1540,20 +1697,51 @@ class GameScene extends Phaser.Scene {
         this.updateAugmentDisplay();
     }
 
-    // Updates the top-left augment icon strip with current levels
+    // Updates the top-left augment icon strip — PNG images where available, emoji fallback otherwise
     updateAugmentDisplay() {
-        const icons = {
-            overkill:'💥', doubleStrike:'⚔⚔', musicNotes:'🎵', fireAttack:'🔥', omnivamp:'🩸', bombs:'💣',
-            deathPool:'☠', freeze:'❄', chain:'🔗', proliferate:'🌀',
-            aura:'🔵', lucky:'🍀', shield:'🛡', cloak:'🎯'
-        };
-        const parts = this.getAllUpgrades()
-            .filter(u => u.type === 'augment' && (this.upgradeLevels[u.id] || 0) > 0)
-            .map(u => {
-                const lv = this.upgradeLevels[u.id];
-                return icons[u.id] + (lv > 1 ? lv : '');
-            });
-        this.augmentText.setText(parts.join('  '));
+        // Destroy sprites from last call
+        if (!this.augmentIconSprites) this.augmentIconSprites = [];
+        this.augmentIconSprites.forEach(s => { if (s.active) s.destroy(); });
+        this.augmentIconSprites = [];
+        this.augmentText.setText(''); // clear the old emoji text
+
+        const active = this.getAllUpgrades()
+            .filter(u => u.type === 'augment' && (this.upgradeLevels[u.id] || 0) > 0);
+
+        const size = 26;   // icon display size in screen px (UI camera, zoom 1)
+        const pad  = 4;
+        let   x    = 14;
+        const y    = 14;
+
+        active.forEach(u => {
+            const lv  = this.upgradeLevels[u.id];
+            const key = u.iconKey;
+
+            if (key && this.textures.exists(key)) {
+                const img = this.add.image(x + size / 2, y + size / 2, key)
+                    .setDisplaySize(size, size).setDepth(100);
+                this.cameras.main.ignore(img);
+                this.augmentIconSprites.push(img);
+            } else {
+                // Emoji fallback
+                const txt = this.add.text(x, y, u.icon || '?', {
+                    fontSize: '18px', stroke: '#000000', strokeThickness: 2
+                }).setDepth(100);
+                this.cameras.main.ignore(txt);
+                this.augmentIconSprites.push(txt);
+            }
+
+            // Level badge — shown if levelled past 1
+            if (lv > 1) {
+                const badge = this.add.text(x + size - 2, y + size, String(lv), {
+                    fontSize: '9px', color: '#ffff44', stroke: '#000000', strokeThickness: 2
+                }).setOrigin(1, 1).setDepth(101);
+                this.cameras.main.ignore(badge);
+                this.augmentIconSprites.push(badge);
+            }
+
+            x += size + pad;
+        });
     }
 
     // Convenience: returns the current level of an upgrade (0 if not picked)
