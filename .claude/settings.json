@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sips -g pixelWidth -g pixelHeight \"/Users/romanhage/CMPM120/FInal Project/assets/Effects:Spells/Spritesheet_Fire.png\")",
+      "Bash(node -e ' *)"
+    ]
+  }
+}

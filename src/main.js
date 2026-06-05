@@ -10,13 +10,12 @@ const config = {
     physics: {
         default: 'arcade',
         arcade: {
-            debug: true,        // shows hitboxes as colored outlines — set false when done tuning
-            debugBodyColor: 0xff0000,  // red outlines
+            debug: false,
             gravity: { y: 0 }
         }
     },
     pixelArt: false,
-    backgroundColor: '#0a0a0f',
+    transparent: true,      // canvas background is transparent — DOM elements show through
     scene: [Load, TitleScene, GameScene, LevelUpScene, WinScene, DeathScene, SettingsScene]
 };
 

@@ -25,13 +25,12 @@ class Load extends Phaser.Scene {
         this.load.image('Props',              'assets/Map_Tileset/Props.png');
         this.load.image('Trees_seperated',    'assets/Map_Tileset/Trees_seperated.png');
 
-        // Minotaur spritesheet — 128×96 per frame, 8 cols × 20 rows
-        this.load.spritesheet('minotaur', 'assets/Enemies/Minotaur_Sprite_Sheet.png', { frameWidth: 128, frameHeight: 96 });
-
         // ── New enemies — all sprites 150×150 px per frame ──────────
         // 1200px wide = 8 frames | 600px wide = 4 frames
         // ── Effect spritesheets (Effects:Spells folder) ──────────────
         const efxPath = 'assets/Effects:Spells/';
+        this.load.spritesheet('efx_lightning',  efxPath + 'LightingAttack.png',              { frameWidth: 64, frameHeight: 64 }); // 7fr
+        this.load.spritesheet('efx_fire_hit',   efxPath + 'Spritesheet_Fire.png',            { frameWidth: 32, frameHeight: 32 }); // 10fr
         this.load.spritesheet('efx_dmg',       efxPath + 'spritesheet_Dmg.png',             { frameWidth: 64, frameHeight: 64 }); // 18fr
         this.load.spritesheet('efx_defense',   efxPath + 'spritesheet_Defense.png',         { frameWidth: 64, frameHeight: 64 }); // 18fr
         this.load.spritesheet('efx_poison',    efxPath + 'spritesheet_Posion.png',          { frameWidth: 64, frameHeight: 64 }); // 17fr
@@ -64,6 +63,12 @@ class Load extends Phaser.Scene {
         this.load.image('icon_lucky',         ic + 'Lucky.png');
         this.load.image('icon_music',         ic + 'Music.png');
         this.load.image('icon_overkill',      ic + 'OverKill.png');
+        this.load.image('icon_lightning',     ic + 'LightingStrike.png');
+
+        // XP orb tiers
+        this.load.image('xp_base',     'assets/Icons/BaseXP.png');
+        this.load.image('xp_uncommon', 'assets/Icons/UncommonXP.png');
+        this.load.image('xp_rare',     'assets/Icons/RareXP.png');
         this.load.image('icon_maxhealth',     ic + 'Max_Health.png');
         this.load.image('icon_extrashot',     ic + 'Extra_Shot.png');
         this.load.image('icon_omnivamp',      ic + 'OmniVamp.png');
@@ -126,7 +131,7 @@ class Load extends Phaser.Scene {
         const cy = this.scale.height / 2;
 
         this.add.text(cx, cy - 50, 'Loading...', {
-            fontSize: '22px', color: '#aaaacc'
+            fontFamily: 'Arial', fontSize: '22px', color: '#aaaacc'
         }).setOrigin(0.5);
 
         const barBg = this.add.rectangle(cx, cy, 400, 16, 0x222233);
@@ -151,13 +156,6 @@ class Load extends Phaser.Scene {
             }
         });
 
-        if (need('minotaur')) {
-            const g = this.make.graphics({ add: false });
-            g.fillStyle(0x8B0000); g.fillCircle(64, 48, 40);
-            g.fillStyle(0xffffff, 0.2); g.fillCircle(50, 36, 12);
-            g.generateTexture('minotaur', 128, 96); g.destroy();
-        }
-
         // Enemy placeholder textures (colored circles, 48×48)
         const enemies = [
             ['enemy_rusher', 0xcc2222],
@@ -175,11 +173,10 @@ class Load extends Phaser.Scene {
         });
 
 
-        if (need('xp_orb')) {
-            const g = this.make.graphics({ add: false });
-            g.fillStyle(0x88ff44); g.fillCircle(5, 5, 4);
-            g.generateTexture('xp_orb', 10, 10); g.destroy();
-        }
+        // XP orb fallbacks (32×32 coloured circles)
+        if (need('xp_base'))     { const g = this.make.graphics({ add: false }); g.fillStyle(0x44ff88); g.fillCircle(16,16,14); g.generateTexture('xp_base',     32, 32); g.destroy(); }
+        if (need('xp_uncommon')) { const g = this.make.graphics({ add: false }); g.fillStyle(0x44aaff); g.fillCircle(16,16,14); g.generateTexture('xp_uncommon', 32, 32); g.destroy(); }
+        if (need('xp_rare'))     { const g = this.make.graphics({ add: false }); g.fillStyle(0xff66ff); g.fillCircle(16,16,14); g.generateTexture('xp_rare',     32, 32); g.destroy(); }
 
         if (need('death_pool')) {
             const g = this.make.graphics({ add: false });

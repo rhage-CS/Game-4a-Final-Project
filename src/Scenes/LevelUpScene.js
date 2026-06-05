@@ -21,12 +21,12 @@ class LevelUpScene extends Phaser.Scene {
         this.add.rectangle(cx, cy, W, H, 0x000000, 0.75);
 
         this.add.text(cx, cy - 200, `LEVEL UP!  →  Lv. ${level}`, {
-            fontSize: '32px', color: '#ffcc44', fontStyle: 'bold',
+            fontFamily: 'Arial', fontSize: '32px', color: '#ffcc44', fontStyle: 'bold',
             stroke: '#000000', strokeThickness: 5
         }).setOrigin(0.5);
 
         this.add.text(cx, cy - 158, 'Choose an upgrade:', {
-            fontSize: '18px', color: '#aaaacc'
+            fontFamily: 'Arial', fontSize: '18px', color: '#aaaacc'
         }).setOrigin(0.5);
 
         // Space cards evenly (up to 3)
@@ -41,7 +41,7 @@ class LevelUpScene extends Phaser.Scene {
         });
 
         this.add.text(cx, cy + 180, 'Click a card to choose', {
-            fontSize: '14px', color: '#555577'
+            fontFamily: 'Arial', fontSize: '14px', color: '#555577'
         }).setOrigin(0.5);
     }
 
@@ -59,7 +59,7 @@ class LevelUpScene extends Phaser.Scene {
             this.add.image(x, y - h / 2 + 44, iconKey).setDisplaySize(48, 48).setOrigin(0.5);
         } else {
             this.add.text(x, y - h / 2 + 38, upgrade.icon || '?', {
-                fontSize: '34px'
+                fontFamily: 'Arial', fontSize: '34px'
             }).setOrigin(0.5);
         }
 
@@ -67,7 +67,7 @@ class LevelUpScene extends Phaser.Scene {
         const badgeLabel = isAugment ? 'AUGMENT' : 'STAT';
         const badgeColor = isAugment ? '#ffaa44' : '#4499ff';
         this.add.text(x, y - h / 2 + 76, badgeLabel, {
-            fontSize: '11px', color: badgeColor
+            fontFamily: 'Arial', fontSize: '11px', color: badgeColor
         }).setOrigin(0.5);
 
         // Level indicator — shows "NEW" if first pick, or "Lv.N → Lv.N+1" if leveling up
@@ -76,22 +76,22 @@ class LevelUpScene extends Phaser.Scene {
             : 'NEW';
         const lvColor = isLevelUp ? '#ffdd66' : '#88ff88';
         this.add.text(x, y - h / 2 + 94, lvLabel, {
-            fontSize: '11px', color: lvColor, fontStyle: 'bold'
+            fontFamily: 'Arial', fontSize: '11px', color: lvColor, fontStyle: 'bold'
         }).setOrigin(0.5);
 
         // Max level indicator
         this.add.text(x, y - h / 2 + 108, `Max: ${upgrade.maxLevel}`, {
-            fontSize: '10px', color: '#555577'
+            fontFamily: 'Arial', fontSize: '10px', color: '#555577'
         }).setOrigin(0.5);
 
         // Upgrade name
         this.add.text(x, y - h / 2 + 130, upgrade.name, {
-            fontSize: '20px', color: '#ffffff', fontStyle: 'bold'
+            fontFamily: 'Arial', fontSize: '20px', color: '#ffffff', fontStyle: 'bold'
         }).setOrigin(0.5);
 
         // Description of what this level gives
         this.add.text(x, y - h / 2 + 162, upgrade.desc, {
-            fontSize: '12px', color: '#aaaacc', align: 'center',
+            fontFamily: 'Arial', fontSize: '12px', color: '#aaaacc', align: 'center',
             wordWrap: { width: w - 20 }
         }).setOrigin(0.5);
 

@@ -22,7 +22,7 @@ class GameScene extends Phaser.Scene {
         this.bossAlive   = false;
         this.level       = 1;
         this.xp          = 0;
-        this.xpRequired  = 50;
+        this.xpRequired  = 20; // starts easy, scales steeply
         this.poolCounter = 0;
 
         // upgradeLevels tracks every upgrade — stats and augments — by level
@@ -83,10 +83,10 @@ class GameScene extends Phaser.Scene {
 
     initStats() {
         this.stats = {
-            maxHp: 100, hp: 100,
+            maxHp: 120, hp: 120,
             hpRegen: 1,
             moveSpeed: 200,
-            damage: 10,
+            damage: 14,
             attackCooldown: 1000,
             pickupRange: 80,
             critChance: 0.10,
@@ -103,12 +103,18 @@ class GameScene extends Phaser.Scene {
         this.auraGraphics     = null;
         this.shieldVisual     = null;
         // Music Notes buff state
-        this.musicBuff       = { active: false, speedApplied: 0, dmgApplied: 0, cdApplied: 0 };
-        this.musicBuffTimer  = null;
-        this.musicKillStacks = 0; // Lv3 — stacks from kills (diminishing / detrimental)
+        this.musicMainBuff      = { active: false };
+        this.musicMainBuffTimer = null;
+        this.musicCastTimer     = null;  // timed interval that fires the main burst
+        this.musicKillBuff      = { active: false };
+        this.musicKillBuffTimer = null;
+        this.musicKillStacks    = 0;     // Lv3 — kill stacks (max 5)
+        this.lastMusicKillAnim  = 0;     // throttle kill-stack animation
         // OmniVamp stolen-stat stacks (max 5)
-        this.omnivampStacks  = 0;
-        this.bombTimer       = null;
+        this.omnivampStacks      = 0;
+        this.lastOmnivampEffect  = 0; // throttles the Dmg.png visual
+        this.bombTimer           = null;
+        this.lightningTimer      = null;
 
         this.isAttacking      = false; // prevents walk/idle interrupting attack anim
         this.isHurt           = false; // prevents other anims interrupting hurt anim
@@ -152,6 +158,9 @@ class GameScene extends Phaser.Scene {
         this.player.body.setOffset(41, 57);
         this.createPlayerAnimations();
         this.player.play('player_idle');
+
+        // Attack range indicator — dim ring showing melee reach
+        this.attackIndicator = this.add.graphics().setDepth(9);
     }
 
     createPlayerAnimations() {
@@ -168,11 +177,14 @@ class GameScene extends Phaser.Scene {
     createEffectAnimations() {
         if (this.anims.exists('efx_dmg')) return;
         // All effect animations play once and auto-destroy via playEffect()
-        this.anims.create({ key: 'efx_dmg',       frames: this.anims.generateFrameNumbers('efx_dmg',       { start: 0, end: 17 }), frameRate: 16, repeat: 0 });
+        this.anims.create({ key: 'efx_lightning',  frames: this.anims.generateFrameNumbers('efx_lightning',  { start: 0, end: 6  }), frameRate: 14, repeat: 0 });
+        this.anims.create({ key: 'efx_fire_hit',   frames: this.anims.generateFrameNumbers('efx_fire_hit',   { start: 0, end: 9  }), frameRate: 14, repeat: 0 });
+        this.anims.create({ key: 'efx_dmg',        frames: this.anims.generateFrameNumbers('efx_dmg',        { start: 0, end: 17 }), frameRate: 16, repeat: 0 });
         this.anims.create({ key: 'efx_defense',   frames: this.anims.generateFrameNumbers('efx_defense',   { start: 0, end: 17 }), frameRate: 16, repeat: 0 });
         this.anims.create({ key: 'efx_poison',    frames: this.anims.generateFrameNumbers('efx_poison',    { start: 0, end: 16 }), frameRate: 14, repeat: 0 });
         this.anims.create({ key: 'efx_aoe',       frames: this.anims.generateFrameNumbers('efx_aoe',       { start: 0, end: 16 }), frameRate: 16, repeat: 0 });
-        this.anims.create({ key: 'efx_music',     frames: this.anims.generateFrameNumbers('efx_music',     { start: 0, end: 20 }), frameRate: 14, repeat: 0 });
+        this.anims.create({ key: 'efx_music',     frames: this.anims.generateFrameNumbers('efx_music',     { start: 0, end: 20 }), frameRate: 14, repeat: 0  });
+        this.anims.create({ key: 'note_fly',      frames: this.anims.generateFrameNumbers('efx_music',     { start: 4, end: 14 }), frameRate: 12, repeat: -1 });
         this.anims.create({ key: 'efx_exp_base',  frames: this.anims.generateFrameNumbers('efx_exp_base',  { start: 0, end: 9  }), frameRate: 16, repeat: 0 });
         this.anims.create({ key: 'efx_exp_fire',  frames: this.anims.generateFrameNumbers('efx_exp_fire',  { start: 0, end: 13 }), frameRate: 14, repeat: 0 });
         this.anims.create({ key: 'efx_exp_magic', frames: this.anims.generateFrameNumbers('efx_exp_magic', { start: 0, end: 9  }), frameRate: 16, repeat: 0 });
@@ -180,7 +192,7 @@ class GameScene extends Phaser.Scene {
 
     showMiss(x, y) {
         const t = this.add.text(x, y - 20, 'MISS', {
-            fontSize: '14px', color: '#ffffff', stroke: '#000000', strokeThickness: 3, alpha: 0.9
+            fontFamily: 'Arial', fontSize: '14px', color: '#ffffff', stroke: '#000000', strokeThickness: 3, alpha: 0.9
         }).setDepth(20).setOrigin(0.5);
         this.tweens.add({ targets: t, y: t.y - 40, alpha: 0, duration: 600,
             ease: 'Quad.easeOut', onComplete: () => t.destroy() });
@@ -195,14 +207,7 @@ class GameScene extends Phaser.Scene {
     }
 
     createEnemyAnimations() {
-        if (this.anims.exists('mino_idle')) return;
-
-        // Minotaur — 128×96 frames, 8 cols × 20 rows (right-facing rows 0–9)
-        this.anims.create({ key: 'mino_idle',   frames: this.anims.generateFrameNumbers('minotaur', { start: 0,  end: 4  }), frameRate: 6,  repeat: -1 });
-        this.anims.create({ key: 'mino_move',   frames: this.anims.generateFrameNumbers('minotaur', { start: 8,  end: 15 }), frameRate: 10, repeat: -1 });
-        this.anims.create({ key: 'mino_attack', frames: this.anims.generateFrameNumbers('minotaur', { start: 24, end: 31 }), frameRate: 12, repeat: 0  });
-        this.anims.create({ key: 'mino_hurt',   frames: this.anims.generateFrameNumbers('minotaur', { start: 56, end: 58 }), frameRate: 12, repeat: 0  });
-        this.anims.create({ key: 'mino_death',  frames: this.anims.generateFrameNumbers('minotaur', { start: 72, end: 77 }), frameRate: 8,  repeat: 0  });
+        if (this.anims.exists('eye_flight')) return;
 
         // Flying Eye — all frames 150×150
         this.anims.create({ key: 'eye_flight', frames: this.anims.generateFrameNumbers('eye_flight', { start: 0, end: 7 }), frameRate: 10, repeat: -1 });
@@ -250,6 +255,8 @@ class GameScene extends Phaser.Scene {
     setupCollisions() {
         this.physics.add.overlap(this.player,         this.enemies,    this.onEnemyTouchPlayer, null, this);
         this.physics.add.overlap(this.deathPoolGroup, this.enemies,    this.onPoolHitEnemy,     null, this);
+        // No hard collider between enemies — avoids bouncing.
+        // Soft separation is handled per-frame in applySeparation().
     }
 
     // ================================================================
@@ -257,14 +264,16 @@ class GameScene extends Phaser.Scene {
     // ================================================================
 
     setupTimers() {
-        this.spawnTimer = this.time.addEvent({ delay: 1800, callback: this.spawnEnemy, callbackScope: this, loop: true });
-        this.time.addEvent({ delay: 15000, callback: this.updateSpawnRate, callbackScope: this, loop: true });
+        // Start at 1200ms (was 1800ms — 50% faster base)
+        this.spawnTimer = this.time.addEvent({ delay: 1200, callback: this.spawnEnemy, callbackScope: this, loop: true });
+        // Re-evaluate every 10s (was 15s) so scaling kicks in faster
+        this.time.addEvent({ delay: 10000, callback: this.updateSpawnRate, callbackScope: this, loop: true });
     }
 
     updateSpawnRate() {
-        const diff     = this.getDifficulty();
-        // Exponential decay — halves roughly every 1.5 difficulty levels
-        const newDelay = Math.max(280, Math.floor(1800 * Math.pow(0.68, diff)));
+        const diff = this.getDifficulty();
+        // Stronger exponential decay: halves roughly every 1.1 difficulty levels
+        const newDelay = Math.max(200, Math.floor(1200 * Math.pow(0.62, diff)));
         this.spawnTimer.reset({ delay: newDelay, callback: this.spawnEnemy, callbackScope: this, loop: true });
     }
 
@@ -279,26 +288,29 @@ class GameScene extends Phaser.Scene {
         // hud() registers each element so the main camera can ignore them
         const hud = el => { this.hudElements.push(el); return el; };
 
-        this.timerText   = hud(this.add.text(W / 2, 16, '0:00 / 15:00', { fontSize: '20px', color: '#ffffff', stroke: '#000000', strokeThickness: 4 }).setOrigin(0.5, 0).setDepth(100));
-        this.levelText   = hud(this.add.text(W - 16, 16, 'Lv. 1',        { fontSize: '18px', color: '#ffcc44', stroke: '#000000', strokeThickness: 3 }).setOrigin(1, 0).setDepth(100));
-        this.augmentText = hud(this.add.text(16, 16, '',                  { fontSize: '15px', color: '#aaffaa', stroke: '#000000', strokeThickness: 3 }).setOrigin(0, 0).setDepth(100));
+        this.timerText   = hud(this.add.text(W / 2, 16, '0:00 / 15:00', { fontFamily: 'Arial', fontSize: '20px', color: '#ffffff', stroke: '#000000', strokeThickness: 4 }).setOrigin(0.5, 0).setDepth(100));
+        this.levelText   = hud(this.add.text(W - 16, 16, 'Lv. 1',        { fontFamily: 'Arial', fontSize: '18px', color: '#ffcc44', stroke: '#000000', strokeThickness: 3 }).setOrigin(1, 0).setDepth(100));
+        this.augmentText = hud(this.add.text(16, 16, '',                  { fontFamily: 'Arial', fontSize: '15px', color: '#aaffaa', stroke: '#000000', strokeThickness: 3 }).setOrigin(0, 0).setDepth(100));
 
         // HP bar
         hud(this.add.rectangle(W / 2, H - 30, 400, 14, 0x330000).setDepth(100).setOrigin(0.5));
         this.hpBarFill = hud(this.add.rectangle(W / 2 - 200, H - 30, 400, 14, 0x22cc44).setDepth(101).setOrigin(0, 0.5));
-        this.hpText    = hud(this.add.text(W / 2, H - 30, '', { fontSize: '11px', color: '#ffffff', stroke: '#000000', strokeThickness: 2 }).setOrigin(0.5).setDepth(102));
+        this.hpText    = hud(this.add.text(W / 2, H - 30, '', { fontFamily: 'Arial', fontSize: '11px', color: '#ffffff', stroke: '#000000', strokeThickness: 2 }).setOrigin(0.5).setDepth(102));
 
-        // XP bar
-        hud(this.add.rectangle(W / 2, H - 12, 400, 10, 0x112200).setDepth(100).setOrigin(0.5));
-        this.xpBarFill = hud(this.add.rectangle(W / 2 - 200, H - 12, 0, 10, 0x44ff88).setDepth(101).setOrigin(0, 0.5));
+        // XP bar — taller, brighter, with level-progress label
+        hud(this.add.rectangle(W / 2, H - 10, 420, 16, 0x0a1a0a).setDepth(100).setOrigin(0.5));
+        this.xpBarFill = hud(this.add.rectangle(W / 2 - 210, H - 10, 0, 16, 0x44ff88).setDepth(101).setOrigin(0, 0.5));
+        this.xpText    = hud(this.add.text(W / 2, H - 10, '', {
+            fontFamily: 'Arial', fontSize: '10px', color: '#aaffaa', stroke: '#000000', strokeThickness: 2
+        }).setOrigin(0.5).setDepth(102));
 
         // Boss HP bar (hidden until boss spawns)
         this.bossBarBg   = hud(this.add.rectangle(W / 2, 60, 500, 18, 0x330000).setDepth(100).setOrigin(0.5).setVisible(false));
         this.bossBarFill = hud(this.add.rectangle(W / 2 - 250, 60, 500, 18, 0xff4400).setDepth(101).setOrigin(0, 0.5).setVisible(false));
-        this.bossLabel   = hud(this.add.text(W / 2, 60, 'BOSS', { fontSize: '12px', color: '#ffffff', stroke: '#000000', strokeThickness: 3 }).setOrigin(0.5).setDepth(102).setVisible(false));
+        this.bossLabel   = hud(this.add.text(W / 2, 60, 'BOSS', { fontFamily: 'Arial', fontSize: '12px', color: '#ffffff', stroke: '#000000', strokeThickness: 3 }).setOrigin(0.5).setDepth(102).setVisible(false));
 
         // Shield charge display (top right, below level text)
-        this.shieldHudText = hud(this.add.text(W - 16, 40, '', { fontSize: '14px', color: '#88ccff', stroke: '#000000', strokeThickness: 3 }).setOrigin(1, 0).setDepth(100));
+        this.shieldHudText = hud(this.add.text(W - 16, 40, '', { fontFamily: 'Arial', fontSize: '14px', color: '#88ccff', stroke: '#000000', strokeThickness: 3 }).setOrigin(1, 0).setDepth(100));
 
         this.updateHUD();
     }
@@ -314,7 +326,9 @@ class GameScene extends Phaser.Scene {
         this.hpBarFill.setFillStyle(hpRatio > 0.5 ? 0x22cc44 : hpRatio > 0.25 ? 0xffaa00 : 0xff2222);
         this.hpText.setText(`${Math.ceil(this.stats.hp)} / ${this.stats.maxHp} HP`);
 
-        this.xpBarFill.setDisplaySize(400 * Math.min(1, this.xp / this.xpRequired), 10);
+        const xpRatio = Math.min(1, this.xp / this.xpRequired);
+        this.xpBarFill.setDisplaySize(420 * xpRatio, 16);
+        this.xpText.setText(`Lv.${this.level}  ${this.xp} / ${this.xpRequired} XP`);
 
         if (this.bossAlive && this.bossRef?.active) {
             this.bossBarFill.setDisplaySize(500 * Math.max(0, this.bossRef.hp / this.bossRef.maxHp), 18);
@@ -374,6 +388,7 @@ class GameScene extends Phaser.Scene {
         this.gameTime += dt;
 
         this.handleMovement();
+        this.updateAttackIndicator();
         this.handleAutoAttack(time);
         this.handleHpRegen(dt);
         this.handleXpMagnet();
@@ -418,6 +433,32 @@ class GameScene extends Phaser.Scene {
         }
     }
 
+    // Draws a dim circle showing the player's melee reach.
+    // Brightens briefly during the attack swing.
+    updateAttackIndicator() {
+        if (!this.attackIndicator) return;
+        const g     = this.attackIndicator;
+        const range = 75 + this.stats.extraShots * 10;
+        const px    = this.player.body.center.x;
+        const py    = this.player.body.center.y;
+
+        g.clear();
+        if (this.isAttacking) {
+            // Pulse bright on swing
+            g.lineStyle(2, 0xffffff, 0.55);
+            g.fillStyle(0xffffff, 0.07);
+        } else {
+            // Subtle guide ring at rest
+            g.lineStyle(1, 0x88ddff, 0.18);
+            g.fillStyle(0x88ddff, 0.03);
+        }
+        g.beginPath();
+        g.arc(px, py, range, 0, Math.PI * 2);
+        g.closePath();
+        g.fillPath();
+        g.strokePath();
+    }
+
     // ================================================================
     //  AUTO-ATTACK
     // ================================================================
@@ -426,7 +467,6 @@ class GameScene extends Phaser.Scene {
         if (time - this.lastAttackTime < this.stats.attackCooldown) return;
         this.performMeleeSwing();
         this.lastAttackTime = time;
-        if (this.augLevel('musicNotes')) this.triggerMusicBuff();
     }
 
     // Soldier: play attack animation then apply damage at the visual hit frame
@@ -486,7 +526,7 @@ class GameScene extends Phaser.Scene {
                     expiry:   this.time.now + duration
                 };
                 enemy.setTint(0xff6600);
-                this.playEffect('efx_poison', enemy.x, enemy.y, 1.2);
+                this.playEffect('efx_fire_hit', enemy.x, enemy.y, 1.8);
             }
 
             this.applyDamageToEnemy(enemy, dmg);
@@ -498,7 +538,11 @@ class GameScene extends Phaser.Scene {
                 const healed   = dmg * healPct;
                 if (healed > 0) {
                     this.stats.hp = Math.min(this.stats.maxHp, this.stats.hp + healed);
-                    this.playEffect('efx_dmg', this.player.x, this.player.y - 20, 1.2);
+                    // Only show the Dmg effect every 3 seconds — small, above player
+                    if (this.time.now - this.lastOmnivampEffect > 3000) {
+                        this.lastOmnivampEffect = this.time.now;
+                        this.playEffect('efx_dmg', this.player.x, this.player.y - 30, 0.55);
+                    }
                 }
             }
 
@@ -611,22 +655,25 @@ class GameScene extends Phaser.Scene {
     spawnEnemy() {
         if (!this.gameActive || this.bossSpawned) return;
         const diff = this.getDifficulty();
-        // Exponential wave size: 1 → 2 → 3 → 4 → 5 as difficulty climbs
-        const count = Math.min(5, Math.ceil(Math.pow(diff + 1, 1.35)));
+        // Exponential wave size with stronger early-game bonus (+20%) and higher cap
+        // Base: 1→2→3→5→7 as diff rises. Early game (diff<0.5) gets +20% more.
+        const baseCount  = Math.pow(diff + 1, 1.6);          // steeper exponent
+        const earlyBonus = diff < 0.5 ? 1.2 : 1.0;           // +20% in first ~2.5 mins
+        const count      = Math.min(8, Math.ceil(baseCount * earlyBonus * 1.5)); // ×1.5 overall
 
         for (let i = 0; i < count; i++) {
             const pos = this.getSpawnPosition();
             const r   = Math.random();
             let type;
-            if      (diff < 1) type = r < 0.5  ? 'eye' : 'goblin';
-            else if (diff < 2) type = r < 0.25  ? 'eye' : r < 0.5  ? 'goblin' : r < 0.75 ? 'mushroom' : 'skeleton';
-            else               type = r < 0.2   ? 'eye' : r < 0.4  ? 'goblin' : r < 0.6  ? 'mushroom' : r < 0.8 ? 'skeleton' : 'minotaur';
+            // All 4 enemies from the start; harder types gain weight over time
+            if      (diff < 1) type = r < 0.35 ? 'eye' : r < 0.65 ? 'goblin' : r < 0.85 ? 'mushroom' : 'skeleton';
+            else if (diff < 2) type = r < 0.25 ? 'eye' : r < 0.5  ? 'goblin' : r < 0.75 ? 'mushroom' : 'skeleton';
+            else               type = r < 0.2  ? 'eye' : r < 0.4  ? 'goblin' : r < 0.6  ? 'mushroom' : 'skeleton';
 
             if      (type === 'eye')      this.createFlyingEye(pos.x, pos.y, diff);
             else if (type === 'goblin')   this.createGoblin(pos.x, pos.y, diff);
             else if (type === 'mushroom') this.createMushroom(pos.x, pos.y, diff);
-            else if (type === 'skeleton') this.createSkeleton(pos.x, pos.y, diff);
-            else                          this.createMinotaur(pos.x, pos.y, diff);
+            else                          this.createSkeleton(pos.x, pos.y, diff);
         }
     }
 
@@ -655,7 +702,7 @@ class GameScene extends Phaser.Scene {
     createRusher(x, y, diff) {
         const e = this.enemies.create(x, y, 'enemy_rusher');
         e.setDepth(8).setDisplaySize(92, 92);
-        e.body.setSize(24, 24).setOffset(28, 28);
+        e.body.setCircle(38, 8, 8); // 92px display, r=38, offset=46-38=8
         e.enemyType = 'rusher'; e.maxHp = 20 + diff * 15; e.hp = e.maxHp;
         e.moveSpeed = 110 + diff * 30; e.damage = 10 + diff * 5; e.xpValue = 8;
         e.lastMeleeTime = 0; e.isBiting = false; e.isDying = false; e.debuffs = {};
@@ -666,7 +713,7 @@ class GameScene extends Phaser.Scene {
     createShooter(x, y, diff) {
         const e = this.enemies.create(x, y, 'enemy_shooter');
         e.setDepth(8).setDisplaySize(92, 92);
-        e.body.setSize(50, 50).setOffset(0, 0);
+        e.body.setCircle(38, 8, 8);
         e.enemyType = 'shooter'; e.maxHp = 25 + diff * 12; e.hp = e.maxHp;
         e.moveSpeed = 80 + diff * 20; e.damage = 8 + diff * 3; e.xpValue = 12;
         e.attackCooldown = Math.max(600, 1500 - diff * 200); e.lastAttackTime = 0;
@@ -678,7 +725,7 @@ class GameScene extends Phaser.Scene {
     createArcer(x, y, diff) {
         const e = this.enemies.create(x, y, 'enemy_arcer');
         e.setDepth(8).setDisplaySize(92, 92);
-        e.body.setSize(50, 50).setOffset(0, 0);
+        e.body.setCircle(38, 8, 8);
         e.enemyType = 'arcer'; e.maxHp = 30 + diff * 14; e.hp = e.maxHp;
         e.moveSpeed = 90 + diff * 22; e.damage = 12 + diff * 4; e.xpValue = 15;
         e.attackCooldown = Math.max(800, 2000 - diff * 300); e.lastAttackTime = 0;
@@ -691,7 +738,7 @@ class GameScene extends Phaser.Scene {
     createFlyingEye(x, y, diff) {
         const e = this.enemies.create(x, y, 'eye_flight');
         e.setDepth(8).setDisplaySize(86, 86);
-        e.body.setSize(24, 22).setOffset(63, 64);
+        e.body.setCircle(34, 9, 9); // 86px display, r=34, offset=43-34=9
         e.enemyType = 'eye'; e.maxHp = 35 + diff * 12; e.hp = e.maxHp;
         e.moveSpeed = 130 + diff * 20; e.damage = 8 + diff * 3; e.xpValue = 12;
         e.attackCooldown = Math.max(800, 1500 - diff * 200); e.lastAttackTime = 0;
@@ -703,7 +750,7 @@ class GameScene extends Phaser.Scene {
     createGoblin(x, y, diff) {
         const e = this.enemies.create(x, y, 'gob_run');
         e.setDepth(8).setDisplaySize(86, 86);
-        e.body.setSize(20, 28).setOffset(65, 61);
+        e.body.setCircle(34, 9, 9); // 86px goblin
         e.enemyType = 'goblin'; e.maxHp = 45 + diff * 12; e.hp = e.maxHp;
         e.moveSpeed = 120 + diff * 18; e.damage = 10 + diff * 3; e.xpValue = 10;
         e.attackCooldown = Math.max(700, 1400 - diff * 200); e.lastAttackTime = 0;
@@ -715,7 +762,7 @@ class GameScene extends Phaser.Scene {
     createMushroom(x, y, diff) {
         const e = this.enemies.create(x, y, 'mush_run');
         e.setDepth(8).setDisplaySize(92, 92);
-        e.body.setSize(22, 28).setOffset(64, 61);
+        e.body.setCircle(38, 8, 8); // 92px mushroom
         e.enemyType = 'mushroom'; e.maxHp = 90 + diff * 25; e.hp = e.maxHp;
         e.moveSpeed = 55 + diff * 10; e.damage = 18 + diff * 5; e.xpValue = 18;
         e.attackCooldown = Math.max(1200, 2000 - diff * 250); e.lastAttackTime = 0;
@@ -727,24 +774,12 @@ class GameScene extends Phaser.Scene {
     createSkeleton(x, y, diff) {
         const e = this.enemies.create(x, y, 'skel_walk');
         e.setDepth(8).setDisplaySize(92, 92);
-        e.body.setSize(20, 30).setOffset(65, 60);
+        e.body.setCircle(38, 8, 8); // 92px skeleton
         e.enemyType = 'skeleton'; e.maxHp = 65 + diff * 18; e.hp = e.maxHp;
         e.moveSpeed = 80 + diff * 14; e.damage = 12 + diff * 4; e.xpValue = 15;
         e.attackCooldown = Math.max(1000, 1800 - diff * 250); e.lastAttackTime = 0;
         e.isAttacking = false; e.isHurt = false; e.isDying = false; e.debuffs = {};
         e.play('skel_walk');
-        return e;
-    }
-
-    createMinotaur(x, y, diff) {
-        const e = this.enemies.create(x, y, 'minotaur');
-        e.setDepth(8).setDisplaySize(92, 69); // preserves 128:96 = 4:3 ratio
-        e.body.setSize(24, 24).setOffset(52, 36);
-        e.enemyType = 'minotaur'; e.maxHp = 80 + diff * 30; e.hp = e.maxHp;
-        e.moveSpeed = 65 + diff * 15; e.damage = 20 + diff * 8; e.xpValue = 30;
-        e.attackCooldown = Math.max(1000, 2200 - diff * 300); e.lastAttackTime = 0;
-        e.isAttacking = false; e.isHurt = false; e.isDying = false; e.debuffs = {};
-        e.play('mino_idle');
         return e;
     }
 
@@ -766,7 +801,6 @@ class GameScene extends Phaser.Scene {
 
         // Pick a random enemy form and a random glow colour — different every run
         const forms = [
-            { tex: 'minotaur',   move: 'mino_move',  attack: 'mino_attack', idle: 'mino_idle',   death: 'mino_death',  w: 276, h: 207 },
             { tex: 'eye_flight', move: 'eye_flight', attack: 'eye_attack',  idle: 'eye_flight',  death: 'eye_death',   w: 253, h: 253 },
             { tex: 'gob_run',    move: 'gob_run',    attack: 'gob_attack',  idle: 'gob_idle',    death: 'gob_death',   w: 253, h: 253 },
             { tex: 'mush_run',   move: 'mush_run',   attack: 'mush_attack', idle: 'mush_idle',   death: 'mush_death',  w: 265, h: 265 },
@@ -781,7 +815,7 @@ class GameScene extends Phaser.Scene {
 
         const boss = this.enemies.create(bx, by, form.tex);
         boss.setDepth(9).setDisplaySize(form.w, form.h);
-        boss.body.setSize(70, 70).setOffset(0, 0);
+        boss.body.setCircle(65, 0, 0); // large boss circle
 
         boss.enemyType    = 'boss';
         boss.bossForm     = form;          // stores animation keys
@@ -825,7 +859,7 @@ class GameScene extends Phaser.Scene {
         const bossText = this.add.text(
             this.scale.width / 2, this.scale.height / 2 - 60,
             '⚠  FINAL BOSS  ⚠',
-            { fontSize: '40px', color: '#ff2200', fontStyle: 'bold', stroke: '#000', strokeThickness: 6 }
+            { fontFamily: 'Arial', fontSize: '40px', color: '#ff2200', fontStyle: 'bold', stroke: '#000', strokeThickness: 6 }
         ).setDepth(200).setOrigin(0.5);
         this.cameras.main.ignore(bossText);
         this.time.delayedCall(3500, () => { if (bossText.active) bossText.destroy(); });
@@ -854,14 +888,15 @@ class GameScene extends Phaser.Scene {
                 case 'goblin':   this.aiGoblin(enemy, time);     break;
                 case 'mushroom': this.aiMushroom(enemy, time);   break;
                 case 'skeleton': this.aiSkeleton(enemy, time);   break;
-                case 'minotaur': this.aiMinotaur(enemy, time);   break;
                 case 'rusher':   this.aiRusher(enemy);           break;
                 case 'shooter':  this.aiShooter(enemy, time);    break;
                 case 'arcer':    this.aiArcer(enemy, time);      break;
                 case 'boss':     this.aiBoss(enemy, time);       break;
             }
+
         });
     }
+
 
     aiRusher(enemy) {
         if (enemy.isBiting) return;
@@ -908,49 +943,7 @@ class GameScene extends Phaser.Scene {
         }
     }
 
-    // Minotaur: slow tank — walks toward player, stops to swing Attack1, plays hurt when hit
-    aiMinotaur(enemy, time) {
-        if (enemy.isAttacking || enemy.isHurt) return;
-
-        const dx   = this.player.x - enemy.x;
-        const dy   = this.player.y - enemy.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const attackRange = 55;
-
-        enemy.setFlipX(dx < 0);
-
-        if (dist > attackRange) {
-            enemy.body.setVelocity((dx / dist) * enemy.currentSpeed, (dy / dist) * enemy.currentSpeed);
-            if (enemy.anims.currentAnim?.key !== 'mino_move') enemy.play('mino_move', true);
-        } else {
-            enemy.body.setVelocity(0, 0);
-            if (time - enemy.lastAttackTime >= enemy.attackCooldown) {
-                enemy.lastAttackTime = time;
-                enemy.isAttacking = true;
-                enemy.play('mino_attack', true);
-                // Deal damage at hit frame (~frame 4 of 8 at 12fps ≈ 300ms)
-                this.time.delayedCall(300, () => {
-                    if (!this.gameActive || !enemy.active || enemy.isDying) return;
-                    const d = Phaser.Math.Distance.Between(enemy.x, enemy.y, this.player.x, this.player.y);
-                    if (d <= attackRange + 15) {
-                        if (Math.random() < 0.30) { this.showMiss(enemy.x, enemy.y); return; }
-                        this.damagePlayer(enemy.damage);
-                        this.cameras.main.flash(100, 255, 50, 0);
-                    }
-                });
-                enemy.once('animationcomplete', () => {
-                    if (enemy.active && !enemy.isDying) {
-                        enemy.isAttacking = false;
-                        enemy.play('mino_idle');
-                    }
-                });
-            } else if (enemy.anims.currentAnim?.key !== 'mino_idle') {
-                enemy.play('mino_idle', true);
-            }
-        }
-    }
-
-    // ── Shared seek-and-attack pattern used by all 4 new enemies ────
+    // ── Shared seek-and-attack pattern used by all 4 enemies ────
     // moveAnim plays while approaching; idleAnim plays at attack range;
     // attackAnim plays on swing; damage fires at the hit frame (~400ms in).
     seekAndAttack(enemy, moveAnim, attackAnim, idleAnim, attackRange, time) {
@@ -1185,66 +1178,108 @@ class GameScene extends Phaser.Scene {
     }
 
     // ================================================================
-    //  MUSIC NOTES AUGMENT
+    //  MUSIC NOTES AUGMENT — timed massive stat burst
     // ================================================================
 
+    // Sets up the repeating cast timer when the augment is picked / levelled
+    setupMusicTimer(level) {
+        if (this.musicCastTimer) this.musicCastTimer.remove();
+        const cooldowns = [10000, 8000, 6000]; // Lv1/2/3 in ms
+        const cd = cooldowns[Math.min(level - 1, 2)];
+        this.musicCastTimer = this.time.addEvent({
+            delay: cd, callback: this.triggerMusicBuff, callbackScope: this, loop: true
+        });
+        // Fire immediately on pickup / level-up
+        this.triggerMusicBuff();
+    }
+
+    // Main burst — HUGE stat boost for a few seconds
     triggerMusicBuff() {
         const lv = this.augLevel('musicNotes');
-        const durations = [2000, 3500, 5000];
+        if (!lv || !this.gameActive) return;
+
+        const durations = [4000, 6000, 8000]; // buff active time per level
         const duration  = durations[lv - 1];
 
-        // Kill-stack contribution for Lv3 — diminishing, then detrimental after ~5 kills
-        let stackContrib = 0;
-        if (lv >= 3) {
-            for (let i = 0; i < this.musicKillStacks; i++) {
-                stackContrib += Math.max(-1.5, 1 - i * 0.25);
-            }
-        }
+        // Remove any lingering main buff first
+        this.removeMusicMainBuff();
 
-        const newSpeed = 35 + Math.round(stackContrib * 12);
-        const newDmg   = 8  + Math.round(stackContrib * 3);
-        const cdMult   = 0.85;
+        // ── Massive bonuses ───────────────────────────────────────────
+        const speedBonus = 100;
+        const dmgBonus   = Math.max(10, Math.floor(this.stats.damage * 0.5));
+        const cdMult     = 0.5;   // halves attack cooldown = double attack speed
+        const regenBonus = 5;
 
-        // Remove old buff before re-applying (timer refresh)
-        if (this.musicBuff.active) {
-            this.stats.moveSpeed      = Math.max(50, this.stats.moveSpeed - this.musicBuff.speedApplied);
-            this.stats.damage         = Math.max(1,  this.stats.damage    - this.musicBuff.dmgApplied);
-            this.stats.attackCooldown = Math.floor(this.stats.attackCooldown / this.musicBuff.cdApplied);
-            if (this.musicBuffTimer) this.musicBuffTimer.remove();
-        }
+        this.stats.moveSpeed      += speedBonus;
+        this.stats.damage         += dmgBonus;
+        this.stats.attackCooldown  = Math.max(150, Math.floor(this.stats.attackCooldown * cdMult));
+        this.stats.hpRegen        += regenBonus;
 
-        // Apply buff
-        this.stats.moveSpeed      += newSpeed;
-        this.stats.damage         += newDmg;
-        this.stats.attackCooldown  = Math.max(200, Math.floor(this.stats.attackCooldown * cdMult));
-        this.musicBuff = { active: true, speedApplied: newSpeed, dmgApplied: newDmg, cdApplied: 1 / cdMult };
+        this.musicMainBuff = { active: true, speedBonus, dmgBonus, cdMult, regenBonus };
 
-        this.playEffect('efx_music', this.player.x, this.player.y, 1.8);
+        // Play efx_music once per cast, centered on player
+        this.playEffect('efx_music', this.player.x, this.player.y, 2.2);
 
-        this.musicBuffTimer = this.time.delayedCall(duration, () => {
-            if (!this.gameActive) return;
-            this.stats.moveSpeed      = Math.max(50, this.stats.moveSpeed - newSpeed);
-            this.stats.damage         = Math.max(1,  this.stats.damage    - newDmg);
-            this.stats.attackCooldown = Math.floor(this.stats.attackCooldown * (1 / cdMult));
-            this.musicBuff = { active: false, speedApplied: 0, dmgApplied: 0, cdApplied: 1 };
-            this.musicBuffTimer = null;
+        // Expire after duration
+        this.musicMainBuffTimer = this.time.delayedCall(duration, () => {
+            this.removeMusicMainBuff();
         });
     }
 
-    showMusicNotes() {
-        ['♪', '♫', '♪'].forEach((note, i) => {
-            this.time.delayedCall(i * 130, () => {
-                if (!this.gameActive) return;
-                const t = this.add.text(
-                    this.player.x + Phaser.Math.Between(-22, 22),
-                    this.player.y - 20,
-                    note,
-                    { fontSize: '18px', color: '#ffee55', stroke: '#000000', strokeThickness: 2 }
-                ).setDepth(20);
-                this.tweens.add({ targets: t, y: t.y - 55, alpha: 0, duration: 750,
-                    ease: 'Quad.easeOut', onComplete: () => t.destroy() });
-            });
+    removeMusicMainBuff() {
+        if (!this.musicMainBuff?.active) return;
+        const b = this.musicMainBuff;
+        this.stats.moveSpeed      = Math.max(50, this.stats.moveSpeed - b.speedBonus);
+        this.stats.damage         = Math.max(1,  this.stats.damage    - b.dmgBonus);
+        this.stats.attackCooldown = Math.min(3000, Math.floor(this.stats.attackCooldown / b.cdMult));
+        this.stats.hpRegen        = Math.max(0,   this.stats.hpRegen  - b.regenBonus);
+        this.musicMainBuff = { active: false };
+        if (this.musicMainBuffTimer) { this.musicMainBuffTimer.remove(); this.musicMainBuffTimer = null; }
+    }
+
+    // Lv3 — kill stacks: each kill adds a smaller buff, stacks up to 5×
+    applyMusicKillStack() {
+        if (!this.gameActive) return;
+
+        // Throttle the visual so it can't spam on mass kills
+        const now = this.time.now;
+        if (now - this.lastMusicKillAnim > 500) {
+            this.playEffect('efx_music', this.player.x, this.player.y, 1.0);
+            this.lastMusicKillAnim = now;
+        }
+
+        // Remove old kill buff before recalculating
+        this.removeMusicKillBuff();
+
+        this.musicKillStacks = Math.min(5, this.musicKillStacks + 1);
+        const s = this.musicKillStacks;
+
+        // Each stack: +20 speed, +4 dmg, +0.5 regen (tiny but additive)
+        const speedBonus = s * 20;
+        const dmgBonus   = s * 4;
+        const regenBonus = s * 0.5;
+
+        this.stats.moveSpeed += speedBonus;
+        this.stats.damage    += dmgBonus;
+        this.stats.hpRegen   += regenBonus;
+
+        this.musicKillBuff = { active: true, speedBonus, dmgBonus, regenBonus };
+
+        // Kill buff lasts 3 seconds, resets timer on each new kill
+        if (this.musicKillBuffTimer) this.musicKillBuffTimer.remove();
+        this.musicKillBuffTimer = this.time.delayedCall(3000, () => {
+            this.removeMusicKillBuff();
+            this.musicKillStacks = 0;
         });
+    }
+
+    removeMusicKillBuff() {
+        if (!this.musicKillBuff?.active) return;
+        const b = this.musicKillBuff;
+        this.stats.moveSpeed = Math.max(50, this.stats.moveSpeed - b.speedBonus);
+        this.stats.damage    = Math.max(1,  this.stats.damage    - b.dmgBonus);
+        this.stats.hpRegen   = Math.max(0,  this.stats.hpRegen   - b.regenBonus);
+        this.musicKillBuff = { active: false };
     }
 
     // ================================================================
@@ -1292,6 +1327,168 @@ class GameScene extends Phaser.Scene {
     // ================================================================
     //  SHIELD AUGMENT — block cap and recharge
     // ================================================================
+
+    // ================================================================
+    //  BOMBS AUGMENT
+    // ================================================================
+
+    setupBombTimer(level) {
+        if (this.bombTimer) this.bombTimer.remove();
+        const cooldowns = [8000, 6000, 4000];
+        const cd = cooldowns[Math.min(level - 1, 2)];
+        this.bombTimer = this.time.addEvent({
+            delay: cd, callback: this.throwBombs, callbackScope: this, loop: true
+        });
+    }
+
+    throwBombs() {
+        const lv = this.augLevel('bombs');
+        if (!lv || !this.gameActive) return;
+
+        const damages  = [25, 40, 60];
+        const radii    = [80, 100, 120];
+        const baseDmg  = damages[lv - 1];
+        const aoeR     = radii[lv - 1];
+
+        // Target the highest-HP enemy (2 targets — or closest if only 1 enemy)
+        const sorted = this.enemies.getChildren()
+            .filter(e => e.active && !e.isDying)
+            .sort((a, b) => (b.hp || 0) - (a.hp || 0));
+
+        const targets = sorted.slice(0, 2);
+        if (!targets.length) return;
+
+        targets.forEach((target, i) => {
+            this.time.delayedCall(i * 250, () => {
+                if (!this.gameActive || !target.active) return;
+
+                // Projectile arc from player to target
+                const proj = this.add.circle(
+                    this.player.x, this.player.y - 20, 8, 0xff8800
+                ).setDepth(16);
+
+                this.tweens.add({
+                    targets: proj,
+                    x: target.x, y: target.y,
+                    duration: 500,
+                    ease: 'Quad.easeIn',
+                    onComplete: () => {
+                        if (proj.active) proj.destroy();
+                        if (!this.gameActive || !target.active) return;
+
+                        // Explosion animation on impact — always use fire explosion
+                        this.playEffect('efx_exp_fire', target.x, target.y, 1.8);
+
+                        // AOE damage after explosion settles
+                        this.time.delayedCall(200, () => {
+                            if (!this.gameActive) return;
+                            const tx = target.x, ty = target.y;
+
+                            this.enemies.getChildren().forEach(enemy => {
+                                if (!enemy.active || enemy.isDying) return;
+                                const dist = Phaser.Math.Distance.Between(tx, ty, enemy.x, enemy.y);
+                                if (dist > aoeR) return;
+
+                                let dmg = baseDmg;
+                                if (lv >= 3) dmg += Math.floor((enemy.maxHp || 50) * 0.12);
+                                if (lv >= 3 && Math.random() < this.stats.critChance)
+                                    dmg = Math.floor(dmg * this.stats.critDamage);
+
+                                this.applyDamageToEnemy(enemy, dmg);
+
+                                if (lv >= 3 && enemy.active && !enemy.isDying) {
+                                    if (!enemy.debuffs) enemy.debuffs = {};
+                                    enemy.debuffs.fire = {
+                                        stacks:   Math.min(5, (enemy.debuffs.fire?.stacks || 0) + 2),
+                                        lastTick: this.time.now,
+                                        expiry:   this.time.now + 4000
+                                    };
+                                    enemy.setTint(0xff6600);
+                                }
+                            });
+
+                            this.cameras.main.flash(80, 255, 120, 0);
+                        }); // end damage delayedCall
+                    }      // end onComplete
+                });        // end tweens.add
+            });            // end stagger delayedCall
+        });                // end forEach
+    }
+
+    // ================================================================
+    //  LIGHTNING STRIKE AUGMENT
+    // ================================================================
+
+    setupLightning(level) {
+        if (this.lightningTimer) this.lightningTimer.remove();
+        const cooldowns = [1500, 1300, 1100, 900];
+        const cd = cooldowns[Math.min(level - 1, 3)];
+        this.lightningTimer = this.time.addEvent({
+            delay: cd, callback: this.fireLightningStrike, callbackScope: this, loop: true
+        });
+    }
+
+    fireLightningStrike() {
+        const lv = this.augLevel('lightningStrike');
+        if (!lv || !this.gameActive) return;
+
+        const damages  = [25, 40, 55, 70];
+        const baseDmg  = damages[lv - 1];
+        const strikeCount = lv >= 4 ? 4 : 2;
+
+        // Get enemies visible on screen
+        const cam   = this.cameras.main;
+        const zoom  = cam.zoom;
+        const visW  = cam.width  / zoom;
+        const visH  = cam.height / zoom;
+        const onScreen = this.enemies.getChildren().filter(e =>
+            e.active && !e.isDying &&
+            e.x >= cam.scrollX - 40 && e.x <= cam.scrollX + visW + 40 &&
+            e.y >= cam.scrollY - 40 && e.y <= cam.scrollY + visH + 40
+        );
+
+        if (!onScreen.length) return;
+
+        // Pick targets (random, no duplicates if possible)
+        const targets = Phaser.Utils.Array.Shuffle([...onScreen]).slice(0, strikeCount);
+
+        targets.forEach((enemy, i) => {
+            this.time.delayedCall(i * 120, () => {
+                if (!this.gameActive || !enemy.active || enemy.isDying) return;
+
+                // Play lightning animation above the enemy
+                this.playEffect('efx_lightning', enemy.x, enemy.y - 20, 1.6);
+
+                // Deal damage after the bolt hits (~frame 4 at 14fps ≈ 290ms)
+                this.time.delayedCall(290, () => {
+                    if (!this.gameActive || !enemy.active || enemy.isDying) return;
+
+                    const isCrit = Math.random() < this.stats.critChance;
+                    const dmg    = isCrit ? baseDmg * this.stats.critDamage : baseDmg;
+                    const prevHp = enemy.hp;
+
+                    // Apply slow debuff (25%)
+                    this.applyDebuff(enemy, 'slow', 1);
+
+                    this.applyDamageToEnemy(enemy, dmg);
+
+                    // Overkill at max level — excess damage splashes nearby
+                    if (lv >= 4 && prevHp > 0 && prevHp < dmg) {
+                        const excess = dmg - prevHp;
+                        const radius = 100;
+                        this.enemies.getChildren().forEach(other => {
+                            if (other === enemy || !other.active || other.isDying) return;
+                            if (Phaser.Math.Distance.Between(enemy.x, enemy.y, other.x, other.y) < radius) {
+                                this.applyDamageToEnemy(other, excess);
+                                this.playEffect('efx_lightning', other.x, other.y - 20, 1.0);
+                            }
+                        });
+                        this.playEffect('efx_aoe', enemy.x, enemy.y, 1.2);
+                    }
+                });
+            });
+        });
+    }
 
     setupShield(level) {
         const maxCharges   = level;
@@ -1375,7 +1572,6 @@ class GameScene extends Phaser.Scene {
             this.playSound('hit', { volume: 0.3 });
             // Animated enemies play their hit reaction; others just flash white
             const hitMap = {
-                minotaur: ['mino_hurt',  'mino_idle'   ],
                 eye:      ['eye_hit',    'eye_flight'  ],
                 goblin:   ['gob_hit',    'gob_idle'    ],
                 mushroom: ['mush_hit',   'mush_idle'   ],
@@ -1417,13 +1613,13 @@ class GameScene extends Phaser.Scene {
                     expiry:   this.time.now + 4000
                 };
                 nearest.setTint(0xff6600);
-                this.playEffect('efx_exp_fire', nearest.x, nearest.y, 1.2);
+                this.playEffect('efx_fire_hit', nearest.x, nearest.y, 2.0);
             }
         }
 
-        // Music Notes Lv3 — accumulate kill stacks (used for buff bonus/penalty)
+        // Music Notes Lv3 — add a kill stack (smaller buff that stacks up to 5×)
         if (this.augLevel('musicNotes') >= 3) {
-            this.musicKillStacks++;
+            this.applyMusicKillStack();
         }
 
         // OmniVamp Lv3 — steal a sliver of enemy stats (capped at 5 stacks)
@@ -1462,7 +1658,6 @@ class GameScene extends Phaser.Scene {
 
         // Animated enemies play a death animation before being removed
         const deathMap = {
-            minotaur: 'mino_death',
             eye:      'eye_death',
             goblin:   'gob_death',
             mushroom: 'mush_death',
@@ -1519,10 +1714,28 @@ class GameScene extends Phaser.Scene {
     // ================================================================
 
     dropXpOrb(x, y, value) {
-        const orb = this.xpOrbs.create(x, y, 'xp_orb');
+        // Time multiplier: +50% XP by minute 15
+        const timeFactor = 1 + Math.min(1, this.gameTime / 900) * 0.5;
+
+        // Tier roll
+        // Rare unlocks at level 10, scales from 2% → 4% by level 20
+        const rareChance = this.level >= 10
+            ? Math.min(0.04, 0.02 + (this.level - 10) * 0.002)
+            : 0;
+        const roll = Math.random();
+        let texKey, mult, size;
+        if (roll < rareChance) {
+            texKey = 'xp_rare';     mult = 15; size = 26; // rare
+        } else if (roll < 0.20) {
+            texKey = 'xp_uncommon'; mult = 7;  size = 22; // uncommon — ~16%
+        } else {
+            texKey = 'xp_base';     mult = 1;  size = 18; // base — ~80%
+        }
+
+        const orb = this.xpOrbs.create(x, y, texKey);
         if (!orb) return;
-        orb.xpValue = value;
-        orb.setDepth(4).setDisplaySize(18, 18); // visible at 1.8× zoom
+        orb.xpValue = Math.floor(value * mult * timeFactor);
+        orb.setDepth(4).setDisplaySize(size, size);
         orb.body.setVelocity(Phaser.Math.Between(-50, 50), Phaser.Math.Between(-50, 50));
         this.time.delayedCall(300, () => { if (orb.active) orb.body.setVelocity(0, 0); });
     }
@@ -1555,7 +1768,8 @@ class GameScene extends Phaser.Scene {
     levelUp() {
         this.level++;
         this.xp         -= this.xpRequired;
-        this.xpRequired  = Math.floor(50 + 40 * (this.level - 1) * Math.pow(1.1, this.level - 1));
+        // Exponential curve: 20 → 28 → 39 → 55 → ... → ~800 by lv20
+        this.xpRequired  = Math.floor(20 * Math.pow(1.38, this.level - 1));
 
         const choices = this.getRandomUpgrades(3);
         this.game.registry.set('pendingUpgrades', choices);
@@ -1590,7 +1804,7 @@ class GameScene extends Phaser.Scene {
             // ── Augments ──────────────────────────────────────────────────────────────
             { id: 'overkill',     type: 'augment', name: 'Overkill',      icon: '💥',  iconKey: 'icon_overkill',    maxLevel: 4, desc: lv => `Excess dmg splashes ${80+lv*20}px radius` },
             { id: 'doubleStrike', type: 'augment', name: 'Double Strike', icon: '⚔⚔', iconKey: 'icon_doublestrike', maxLevel: 4, desc: lv => `Follow-up strike at ${30+lv*10}% dmg${lv>=4?' + knockback':''}` },
-            { id: 'musicNotes',   type: 'augment', name: 'Music Notes',   icon: '🎵',  iconKey: 'icon_music',       maxLevel: 3, desc: lv => `Attack buffs speed/dmg/atkspd for ${[2,3.5,5][lv-1]}s${lv>=3?'. Kills stack (diminishing)':''}` },
+            { id: 'musicNotes',   type: 'augment', name: 'Music Notes',   icon: '🎵',  iconKey: 'icon_music',       maxLevel: 3, desc: lv => `Every ${[10,8,6][lv-1]}s: HUGE burst ${[4,6,8][lv-1]}s (×2 atkspd, +100spd, +50%dmg, +5regen)${lv>=3?' Kills stack (5×)':''}` },
             { id: 'fireAttack',   type: 'augment', name: 'Fire Attack',   icon: '🔥',  iconKey: 'icon_fire',        maxLevel: 3, desc: lv => `Attacks ignite: ${[2,3,3][lv-1]} stacks, ${[3,4.5,5][lv-1]}s${lv>=3?' + spreads on kill':''}` },
             { id: 'omnivamp',     type: 'augment', name: 'Omni-Vamp',     icon: '🩸',  iconKey: 'icon_omnivamp',    maxLevel: 3, desc: lv => `Heal ${[3,7,12][lv-1]}% of dmg dealt${lv>=3?'. Kills steal enemy stats (5× max)':''}` },
             { id: 'deathPool',    type: 'augment', name: 'Death Pool',    icon: '☠',   iconKey: 'icon_deathpool',   maxLevel: 4, desc: lv => `Bleed puddles deal ${5+lv*3} DPS` },
@@ -1601,20 +1815,35 @@ class GameScene extends Phaser.Scene {
             { id: 'lucky',        type: 'augment', name: 'Lucky',         icon: '🍀',  iconKey: 'icon_lucky',       maxLevel: 3, desc: lv => `+${lv*5}% crit chance, better upgrade pool` },
             { id: 'shield',       type: 'augment', name: 'Shield',        icon: '🛡',   iconKey: 'icon_shield',      maxLevel: 3, desc: lv => `${lv} block${lv>1?'s':''}, ${Math.max(8,20-lv*4)}s recharge` },
             { id: 'cloak',        type: 'augment', name: 'Cloak',         icon: '🎯',  iconKey: 'icon_cloak',       maxLevel: 5, desc: lv => `+${lv*19}% crit chance${lv>=5?', +20% crit dmg':''}` },
+            { id: 'lightningStrike', type: 'augment', name: 'Lightning Strike', icon: '⚡⚡', iconKey: 'icon_lightning', maxLevel: 4, desc: lv => `2${lv>=4?'+2':''} strikes every ${[1.5,1.3,1.1,0.9][lv-1]}s, ${[25,40,55,70][lv-1]} dmg, 25% slow, crits${lv>=4?', overkill':''}` },
             { id: 'bombs',        type: 'augment', name: 'Bombs',         icon: '💣',  iconKey: 'icon_bomb',        maxLevel: 3, desc: lv => `Throw 2 bombs every ${[8,6,4][lv-1]}s, ${[25,40,60][lv-1]}dmg${lv>=3?' + burn ground, extra hp-% bomb, DoTs, crits':''}` },
         ];
     }
 
-    // Returns 3 random upgrades, respecting max levels and Lucky weighting
+    // Returns 3 random upgrades with weighted pool:
+    //   • Maxed upgrades never appear.
+    //   • Augments are 3× more likely than stats (stats still show, just rarely).
+    //   • When all augments are maxed the pool falls back to stats only.
+    //   • Lucky augment pushes augment weight even higher.
     getRandomUpgrades(count) {
-        const all       = this.getAllUpgrades();
-        const available = all.filter(u => (this.upgradeLevels[u.id] || 0) < u.maxLevel);
+        const all  = this.getAllUpgrades();
+        const avail = all.filter(u => (this.upgradeLevels[u.id] || 0) < u.maxLevel);
 
-        // Lucky augment biases the pool toward augments
+        const stats    = avail.filter(u => u.type === 'stat');
+        const augments = avail.filter(u => u.type === 'augment');
+
+        // Base pool: each augment appears 3 times, each stat appears once
+        // If all augments are maxed, fall back to stats at full weight
+        let pool;
+        if (augments.length > 0) {
+            pool = [...stats, ...augments, ...augments, ...augments];
+        } else {
+            pool = [...stats];
+        }
+
+        // Lucky augment adds even more augment copies (biases harder toward augments)
         const luckLv = this.augLevel('lucky');
-        let pool     = [...available];
-        if (luckLv > 0) {
-            const augments = available.filter(u => u.type === 'augment');
+        if (luckLv > 0 && augments.length > 0) {
             for (let i = 0; i < luckLv * 2; i++) pool = pool.concat(augments);
         }
 
@@ -1682,6 +1911,12 @@ class GameScene extends Phaser.Scene {
                 case 'bombs':
                     this.setupBombTimer(newLevel);
                     break;
+                case 'lightningStrike':
+                    this.setupLightning(newLevel);
+                    break;
+                case 'musicNotes':
+                    this.setupMusicTimer(newLevel);
+                    break;
                 case 'lucky':
                     this.stats.critChance = Math.min(0.95, this.stats.critChance + 0.05);
                     break;
@@ -1725,7 +1960,7 @@ class GameScene extends Phaser.Scene {
             } else {
                 // Emoji fallback
                 const txt = this.add.text(x, y, u.icon || '?', {
-                    fontSize: '18px', stroke: '#000000', strokeThickness: 2
+                    fontFamily: 'Arial', fontSize: '18px', stroke: '#000000', strokeThickness: 2
                 }).setDepth(100);
                 this.cameras.main.ignore(txt);
                 this.augmentIconSprites.push(txt);
@@ -1734,7 +1969,7 @@ class GameScene extends Phaser.Scene {
             // Level badge — shown if levelled past 1
             if (lv > 1) {
                 const badge = this.add.text(x + size - 2, y + size, String(lv), {
-                    fontSize: '9px', color: '#ffff44', stroke: '#000000', strokeThickness: 2
+                    fontFamily: 'Arial', fontSize: '9px', color: '#ffff44', stroke: '#000000', strokeThickness: 2
                 }).setOrigin(1, 1).setDepth(101);
                 this.cameras.main.ignore(badge);
                 this.augmentIconSprites.push(badge);
@@ -1788,5 +2023,12 @@ class GameScene extends Phaser.Scene {
 
     setupDebug() {
         this.input.keyboard.once('keydown-B', () => { this.gameTime = 899; });
+
+        // Press 1 — skip straight to the boss fight at max difficulty
+        this.input.keyboard.once('keydown-ONE', () => {
+            this.gameTime = 899; // next checkBossSpawn() call (next frame) will fire the boss
+            // Also fast-forward the spawn rate so it feels like late-game
+            this.updateSpawnRate();
+        });
     }
 }

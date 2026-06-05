@@ -19,12 +19,12 @@ class ClassSelect extends Phaser.Scene {
         this.add.rectangle(cx, cy, this.scale.width, this.scale.height, 0x050510);
 
         this.add.text(cx, 60, 'SELECT YOUR CLASS', {
-            fontSize: '36px', color: '#ffcc44', fontStyle: 'bold',
+            fontFamily: 'Arial', fontSize: '36px', color: '#ffcc44', fontStyle: 'bold',
             stroke: '#000000', strokeThickness: 5
         }).setOrigin(0.5);
 
         this.add.text(cx, 100, 'Pick a class to begin your run', {
-            fontSize: '16px', color: '#888899'
+            fontFamily: 'Arial', fontSize: '16px', color: '#888899'
         }).setOrigin(0.5);
 
         // Class 1 — always unlocked, single targeted shot, balanced stats
@@ -45,7 +45,7 @@ class ClassSelect extends Phaser.Scene {
 
         // Back button returns to the title screen
         const backBtn = this.add.text(cx, this.scale.height - 50, '← Back', {
-            fontSize: '18px', color: '#888888', padding: { x: 12, y: 6 }
+            fontFamily: 'Arial', fontSize: '18px', color: '#888888', padding: { x: 12, y: 6 }
         }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
         backBtn.on('pointerover', () => backBtn.setColor('#ffffff'));
@@ -65,12 +65,12 @@ class ClassSelect extends Phaser.Scene {
 
         // Small "CLASS 1" / "CLASS 2" label at the top
         this.add.text(x, y - cardH / 2 + 24, label, {
-            fontSize: '12px', color: '#888899'
+            fontFamily: 'Arial', fontSize: '12px', color: '#888899'
         }).setOrigin(0.5);
 
         // Class name in the card's accent color
         this.add.text(x, y - cardH / 2 + 48, name, {
-            fontSize: '24px',
+            fontFamily: 'Arial', fontSize: '24px',
             color: unlocked ? `#${color.toString(16).padStart(6, '0')}` : '#555566',
             fontStyle: 'bold'
         }).setOrigin(0.5);
@@ -83,7 +83,7 @@ class ClassSelect extends Phaser.Scene {
         // List of stats below the avatar
         stats.forEach((line, i) => {
             this.add.text(x, y + 30 + i * 24, line, {
-                fontSize: '13px',
+                fontFamily: 'Arial', fontSize: '13px',
                 color: unlocked ? '#aaaacc' : '#444455',
                 align: 'center'
             }).setOrigin(0.5);
@@ -91,16 +91,16 @@ class ClassSelect extends Phaser.Scene {
 
         if (!unlocked) {
             // Show a lock icon and "complete a run to unlock" message instead of a button
-            this.add.text(x, y - 50, '🔒', { fontSize: '32px' }).setOrigin(0.5);
+            this.add.text(x, y - 50, '🔒', { fontFamily: 'Arial', fontSize: '32px' }).setOrigin(0.5);
             this.add.text(x, y + cardH / 2 - 32, 'Complete a run to unlock', {
-                fontSize: '12px', color: '#556677'
+                fontFamily: 'Arial', fontSize: '12px', color: '#556677'
             }).setOrigin(0.5);
             return;
         }
 
         // SELECT button — starts the game with this class
         const btn = this.add.text(x, y + cardH / 2 - 28, 'SELECT', {
-            fontSize: '18px', color: '#ffffff',
+            fontFamily: 'Arial', fontSize: '18px', color: '#ffffff',
             backgroundColor: '#' + color.toString(16).padStart(6, '0').replace(/^/, ''),
             padding: { x: 20, y: 8 }
         }).setOrigin(0.5).setInteractive({ useHandCursor: true });

@@ -23,12 +23,12 @@ class DeathScene extends Phaser.Scene {
 
         // Faint glow layer behind the title
         this.add.text(cx, cy - 130, 'YOU DIED', {
-            fontSize: '72px', color: '#880000', fontStyle: 'bold'
+            fontFamily: 'Arial', fontSize: '72px', color: '#880000', fontStyle: 'bold'
         }).setOrigin(0.5).setAlpha(0.4);
 
         // Main title — alpha pulse to give it an ominous feel
         const title = this.add.text(cx, cy - 130, 'YOU DIED', {
-            fontSize: '68px', color: '#ff2222', fontStyle: 'bold',
+            fontFamily: 'Arial', fontSize: '68px', color: '#ff2222', fontStyle: 'bold',
             stroke: '#000000', strokeThickness: 6
         }).setOrigin(0.5);
 
@@ -38,19 +38,19 @@ class DeathScene extends Phaser.Scene {
         });
 
         this.add.text(cx, cy - 60, "You didn't survive...", {
-            fontSize: '22px', color: '#cc8888', stroke: '#000000', strokeThickness: 3
+            fontFamily: 'Arial', fontSize: '22px', color: '#cc8888', stroke: '#000000', strokeThickness: 3
         }).setOrigin(0.5);
 
         // How long the player lasted this run
         const mins = Math.floor(this.survivalTime / 60);
         const secs = String(Math.floor(this.survivalTime % 60)).padStart(2, '0');
         this.add.text(cx, cy - 15, `Survived: ${mins}:${secs}`, {
-            fontSize: '20px', color: '#ff8888'
+            fontFamily: 'Arial', fontSize: '20px', color: '#ff8888'
         }).setOrigin(0.5);
 
         // What level they reached
         this.add.text(cx, cy + 15, `Reached Level: ${this.level}`, {
-            fontSize: '18px', color: '#cc6666'
+            fontFamily: 'Arial', fontSize: '18px', color: '#cc6666'
         }).setOrigin(0.5);
 
         // Pick a random tip to show — add more tips here if you want
@@ -62,12 +62,12 @@ class DeathScene extends Phaser.Scene {
             'Tip: Death Pool is strong against dense groups',
         ];
         this.add.text(cx, cy + 55, Phaser.Utils.Array.GetRandom(tips), {
-            fontSize: '14px', color: '#775555', fontStyle: 'italic'
+            fontFamily: 'Arial', fontSize: '14px', color: '#775555', fontStyle: 'italic'
         }).setOrigin(0.5);
 
         // Try Again — sends player back to class select to start a new run
         const retryBtn = this.add.text(cx, cy + 110, '↺  TRY AGAIN', {
-            fontSize: '26px', color: '#ffffff', backgroundColor: '#4a1a1a',
+            fontFamily: 'Arial', fontSize: '26px', color: '#ffffff', backgroundColor: '#4a1a1a',
             padding: { x: 24, y: 12 }, stroke: '#000000', strokeThickness: 3
         }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
@@ -77,7 +77,7 @@ class DeathScene extends Phaser.Scene {
 
         // Return to Title — goes all the way back to the main menu
         const titleBtn = this.add.text(cx, cy + 165, 'Return to Title', {
-            fontSize: '16px', color: '#888888', padding: { x: 10, y: 6 }
+            fontFamily: 'Arial', fontSize: '16px', color: '#888888', padding: { x: 10, y: 6 }
         }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
         titleBtn.on('pointerover', () => titleBtn.setColor('#ffffff'));

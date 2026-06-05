@@ -32,12 +32,12 @@ class WinScene extends Phaser.Scene {
 
         // Faint glow version of the title (rendered first, behind main title)
         this.add.text(cx, cy - 140, 'YOU WIN!', {
-            fontSize: '72px', color: '#ffaa00', fontStyle: 'bold'
+            fontFamily: 'Arial', fontSize: '72px', color: '#ffaa00', fontStyle: 'bold'
         }).setOrigin(0.5).setAlpha(0.25);
 
         // Main title with a subtle breathing scale tween
         const title = this.add.text(cx, cy - 140, 'YOU WIN!', {
-            fontSize: '68px', color: '#ffff44', fontStyle: 'bold',
+            fontFamily: 'Arial', fontSize: '68px', color: '#ffff44', fontStyle: 'bold',
             stroke: '#000000', strokeThickness: 6
         }).setOrigin(0.5);
 
@@ -47,14 +47,14 @@ class WinScene extends Phaser.Scene {
         });
 
         this.add.text(cx, cy - 70, 'The boss has been defeated!', {
-            fontSize: '22px', color: '#aaffcc', stroke: '#000000', strokeThickness: 3
+            fontFamily: 'Arial', fontSize: '22px', color: '#aaffcc', stroke: '#000000', strokeThickness: 3
         }).setOrigin(0.5);
 
         // Show this run's survival time
         const mins = Math.floor(this.survivalTime / 60);
         const secs = String(Math.floor(this.survivalTime % 60)).padStart(2, '0');
         this.add.text(cx, cy - 30, `Survival Time: ${mins}:${secs}`, {
-            fontSize: '20px', color: '#88ffaa'
+            fontFamily: 'Arial', fontSize: '20px', color: '#88ffaa'
         }).setOrigin(0.5);
 
         // Show all-time best time if one exists in localStorage
@@ -63,20 +63,20 @@ class WinScene extends Phaser.Scene {
             const bm = Math.floor(save.bestTime / 60);
             const bs = String(save.bestTime % 60).padStart(2, '0');
             this.add.text(cx, cy + 5, `Best Time: ${bm}:${bs}`, {
-                fontSize: '16px', color: '#55bb77'
+                fontFamily: 'Arial', fontSize: '16px', color: '#55bb77'
             }).setOrigin(0.5);
         }
 
         // Confirm that class 2 is now available (GameScene already saved this)
         if (save && save.completedRun) {
             this.add.text(cx, cy + 35, '✓ Class 2 Unlocked', {
-                fontSize: '16px', color: '#aa66ff'
+                fontFamily: 'Arial', fontSize: '16px', color: '#aa66ff'
             }).setOrigin(0.5);
         }
 
         // Play Again — goes back to title screen
         const btn = this.add.text(cx, cy + 100, '▶  PLAY AGAIN', {
-            fontSize: '26px', color: '#ffffff', backgroundColor: '#1a4a1a',
+            fontFamily: 'Arial', fontSize: '26px', color: '#ffffff', backgroundColor: '#1a4a1a',
             padding: { x: 24, y: 12 }, stroke: '#000000', strokeThickness: 3
         }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
@@ -85,7 +85,7 @@ class WinScene extends Phaser.Scene {
         btn.on('pointerdown', () => this.scene.start('titleScene'));
 
         this.add.text(cx, cy + 155, 'or press R to return to title', {
-            fontSize: '14px', color: '#555577'
+            fontFamily: 'Arial', fontSize: '14px', color: '#555577'
         }).setOrigin(0.5);
 
         this.input.keyboard.once('keydown-R', () => this.scene.start('titleScene'));
@@ -93,7 +93,7 @@ class WinScene extends Phaser.Scene {
         // ── Asset Credits ─────────────────────────────────────────────
         const credY = H - 72;
         this.add.text(cx, credY, 'Asset Credits', {
-            fontSize: '13px', color: '#666688', fontStyle: 'bold'
+            fontFamily: 'Arial', fontSize: '13px', color: '#666688', fontStyle: 'bold'
         }).setOrigin(0.5);
 
         const credits = [
@@ -103,7 +103,7 @@ class WinScene extends Phaser.Scene {
         ];
         credits.forEach((line, i) => {
             this.add.text(cx, credY + 18 + i * 16, line, {
-                fontSize: '11px', color: '#444466'
+                fontFamily: 'Arial', fontSize: '11px', color: '#444466'
             }).setOrigin(0.5);
         });
     }

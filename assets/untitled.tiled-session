@@ -1,9 +1,12 @@
 {
-    "activeFile": "",
+    "activeFile": "FinalGameMap.tmj",
     "expandedProjectPaths": [
     ],
     "fileStates": {
         "": {
+            "scaleInDock": 1
+        },
+        "/Users/romanhage/Downloads/EPIC RPG World Pack - [FREE Demo]Grass Land 2.0-REWORK/TiledMap Editor/Tilesets/Tilesets and props Demo.tsx": {
             "scaleInDock": 1
         },
         "/Users/romanhage/Downloads/EPIC RPG World Pack - [FREE Demo]Grass Land 2.0-REWORK/TiledMap Editor/sample map demo.tmx": {
@@ -19,11 +22,11 @@
             "scaleInEditor": 1
         },
         "FinalGameMap.tmj": {
-            "scale": 0.19296875,
+            "scale": 0.33,
             "selectedLayer": 0,
             "viewCenter": {
-                "x": 2560,
-                "y": 1634.9797570850203
+                "x": 2600,
+                "y": 2059.090909090909
             }
         },
         "FinalGameMap.tmj#Props": {
@@ -114,10 +117,15 @@
         }
     },
     "last.exportedFilePath": "/Users/romanhage/CMPM120/FInal Project/assets",
+    "map.lastUsedExportFilter": "Tiled map files (*.tmx *.xml)",
     "openFiles": [
+        "FinalGameMap.tmj",
+        "/Users/romanhage/Downloads/EPIC RPG World Pack - [FREE Demo]Grass Land 2.0-REWORK/TiledMap Editor/sample map demo.tmx"
     ],
     "project": "untitled.tiled-project",
     "recentFiles": [
+        "/Users/romanhage/Downloads/EPIC RPG World Pack - [FREE Demo]Grass Land 2.0-REWORK/TiledMap Editor/sample map demo.tmx",
+        "FinalGameMap.tmj",
         "FinalGameMap.tmx",
         "Map_Tileset/Tiled_files/Ground_rocks.tsx",
         "Map_Tileset/Tiled_files/Water_detilazation2.tsx",
